@@ -1,0 +1,32 @@
+{
+  "name": "lychee-cache",
+  "version": "0.1.0",
+  "description": "Zero-dependency helper CLIs for cached Lychee link-checking: lychee-norm-cache (run + normalize .lycheecache) and refcache (inspect/prune the cache).",
+  "keywords": [
+    "lychee",
+    "link-checker",
+    "link-checking",
+    "cache",
+    "cli"
+  ],
+  "homepage": "https://github.com/chalin/lychee-cache#readme",
+  "bugs": "https://github.com/chalin/lychee-cache/issues",
+  "repository": "github:chalin/lychee-cache",
+  "license": "Apache-2.0",
+  "author": "Patrice Chalin",
+  "type": "module",
+  "bin": {
+    "lychee-norm-cache": "check/index.mjs",
+    "refcache": "refcache/index.mjs"
+  },
+  "files": [
+    "check/index.mjs",
+    "refcache/index.mjs"
+  ],
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}
