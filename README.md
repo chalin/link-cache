@@ -46,11 +46,16 @@ forwards (e.g. `--offline`, `--max-cache-age 0`).
 
 ## Development
 
-Zero runtime and dev dependencies. Run the tests with:
+The published CLIs have **zero runtime dependencies**; Prettier is the only dev
+dependency. Run the checks (format + tests) with:
 
 ```sh
-npm test
+npm install
+npm run check
 ```
+
+Tests use Node's built-in test runner (`node --test`) and need no network or the
+lychee binary.
 
 <!-- prettier-ignore-start -->
 [Lychee]: https://github.com/lycheeverse/lychee

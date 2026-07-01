@@ -24,7 +24,17 @@
     "refcache/index.mjs"
   ],
   "scripts": {
+    "check": "npm run check:format && npm test",
+    "check:format": "prettier --check .",
+    "fix:format": "prettier --write .",
     "test": "node --test"
+  },
+  "prettier": {
+    "proseWrap": "always",
+    "singleQuote": true
+  },
+  "devDependencies": {
+    "prettier": "^3.9.4"
   },
   "engines": {
     "node": ">=24"
