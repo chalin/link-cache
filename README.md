@@ -1,4 +1,4 @@
-# lychee-cache
+# link-cache
 
 Zero-dependency helper CLIs for **cached** link checking with [Lychee][], for
 any static site that builds to a `public/` directory (Docsy, Hugo, and others).
@@ -27,7 +27,7 @@ change when links actually change.
 Until this package is published to the npm registry, install it from GitHub:
 
 ```sh
-npm install --save-dev github:chalin/lychee-cache
+npm install --save-dev github:chalin/link-cache
 ```
 
 This puts both bins on your project's `PATH`.
