@@ -1,6 +1,6 @@
 {
   "name": "link-cache",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Zero-dependency helper CLIs for cached Lychee link-checking: lychee-norm-cache (run + normalize .lycheecache) and refcache (inspect/prune the cache).",
   "keywords": [
     "lychee",

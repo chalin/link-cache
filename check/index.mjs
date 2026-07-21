@@ -7,7 +7,13 @@
 // GITHUB_TOKEN, which also lifts the github.com rate limit; CI sets it directly.
 
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  readFileSync,
+  realpathSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -45,6 +51,21 @@ export function sortCacheText(text) {
   return lines.join('\n') + '\n';
 }
 
+// Return the site's public/ dir under the given cwd, or null if missing.
+// The path is kept lexical (symlinks unresolved): sites often symlink public/
+// to a separate diffable repo, and the /public/-anchored exclude_path patterns
+// in lychee.toml silently stop matching if the path handed to lychee no longer
+// contains the /public component.
+export function publicDirOf(cwd) {
+  const publicDir = path.join(cwd, 'public');
+  try {
+    if (!statSync(publicDir).isDirectory()) return null;
+  } catch {
+    return null;
+  }
+  return publicDir;
+}
+
 // --- lychee invocation -----------------------------------------------------
 
 function ghAuthToken() {
@@ -68,10 +89,8 @@ function main(argv) {
   }
 
   const cwd = process.cwd();
-  let publicDir;
-  try {
-    publicDir = realpathSync(path.join(cwd, 'public'));
-  } catch {
+  const publicDir = publicDirOf(cwd);
+  if (!publicDir) {
     process.stderr.write(
       `[help] ${path.join(cwd, 'public')} not found. Build the site first.\n`,
     );

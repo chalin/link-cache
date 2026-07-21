@@ -5,12 +5,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync, symlinkSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { resolveToken, sortCacheText } from './index.mjs';
+import { publicDirOf, resolveToken, sortCacheText } from './index.mjs';
 
 // --- resolveToken ---
 
@@ -77,6 +77,67 @@ test('sortCacheText sorts by byte value (C locale), not UTF-16 code unit', () =>
   const b = '\u{1F600},200,1\n';
   assert.equal(sortCacheText(b + a), a + b, 'byte order keeps U+E000 first');
 });
+
+// --- publicDirOf ---
+
+test('publicDirOf returns the lexical path for a plain directory', () => {
+  const site = mkdtempSync(join(tmpdir(), 'lnc-'));
+  try {
+    mkdirSync(join(site, 'public'));
+    assert.equal(publicDirOf(site), join(site, 'public'), 'public dir found');
+  } finally {
+    rmSync(site, { recursive: true, force: true });
+  }
+});
+
+test(
+  'publicDirOf keeps the lexical path when public is a symlink',
+  { skip: process.platform === 'win32' ? 'POSIX symlinks only' : false },
+  () => {
+    // Sites often symlink public/ to a separate (diffable) git repo. The
+    // /public/-anchored exclude_path patterns in lychee.toml only match if the
+    // path handed to lychee still ends in /public — resolving the symlink
+    // would silently disable every exclusion.
+    const dir = mkdtempSync(join(tmpdir(), 'lnc-'));
+    try {
+      const target = join(dir, 'site.g');
+      mkdirSync(target);
+      const site = join(dir, 'site');
+      mkdirSync(site);
+      symlinkSync(target, join(site, 'public'));
+      assert.equal(
+        publicDirOf(site),
+        join(site, 'public'),
+        'the /public path component is preserved',
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  },
+);
+
+test('publicDirOf returns null when public is missing', () => {
+  const site = mkdtempSync(join(tmpdir(), 'lnc-'));
+  try {
+    assert.equal(publicDirOf(site), null, 'missing public dir is reported');
+  } finally {
+    rmSync(site, { recursive: true, force: true });
+  }
+});
+
+test(
+  'publicDirOf returns null for a dangling public symlink',
+  { skip: process.platform === 'win32' ? 'POSIX symlinks only' : false },
+  () => {
+    const site = mkdtempSync(join(tmpdir(), 'lnc-'));
+    try {
+      symlinkSync(join(site, 'no-such-target'), join(site, 'public'));
+      assert.equal(publicDirOf(site), null, 'dangling symlink is reported');
+    } finally {
+      rmSync(site, { recursive: true, force: true });
+    }
+  },
+);
 
 // --- CLI: --help short-circuits before the lychee check ---
 
