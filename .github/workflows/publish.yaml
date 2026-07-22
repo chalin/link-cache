@@ -1,9 +1,7 @@
 name: publish
 
-# Publishes to the npm registry when a GitHub release is published.
-# Auth: npm trusted publishing (OIDC) — configure on npmjs.com under
-# package Settings > Trusted Publisher (repo chalin/link-cache, workflow
-# publish.yaml). Provenance is generated automatically. No npm token needed.
+# Auth: npm trusted publishing (OIDC) — requires one-time setup on npmjs.com
+# (package Settings > Trusted Publisher: this repo + this workflow).
 
 on:
   release:
@@ -16,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write # required for OIDC trusted publishing + provenance
+      id-token: write # OIDC trusted publishing + provenance
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
@@ -27,9 +25,7 @@ jobs:
         run: |
           version=$(node -p 'require("./package.json").version')
           test "$GITHUB_REF_NAME" = "v$version"
-      # No install or checks here: the `check` workflow already validates every
-      # push to main, and publishing needs no node_modules (zero runtime deps,
-      # no build step, no lifecycle scripts). Keeping this job free of
-      # registry-delivered code means nothing untrusted runs with id-token
-      # authority.
+      # No install or checks: `check` already gates every push, and publishing
+      # needs no node_modules — so no registry-delivered code runs with
+      # id-token authority.
       - run: npm publish --ignore-scripts
