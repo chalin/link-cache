@@ -24,10 +24,14 @@ change when links actually change.
 
 ## Install
 
-Until this package is published to the npm registry, install it from GitHub:
+```sh
+npm install --save-dev link-cache
+```
+
+Or, to install from GitHub rather than the npm registry:
 
 ```sh
-npm install --save-dev github:chalin/link-cache
+npm install --save-dev github:chalin/link-cache#semver:^0.3.0
 ```
 
 This puts both bins on your project's `PATH`.
