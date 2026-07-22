@@ -51,11 +51,11 @@ npm run refcache -- --summary # cache stats (count, oldest, status, ages)
 
 > [!WARNING]
 >
-> Don't invoke these bins via `npx`: this package isn't on the npm
-> registry, so on a stale or missing `node_modules`, `npx` falls back to the
-> public registry and runs **whatever package holds the name there** (the
-> `lychee-norm-cache` name is squatted). Bare bin names in `npm run` scripts
-> resolve locally or fail loudly — they never touch the registry.
+> Don't invoke these bins via `npx`: this package isn't on the npm registry, so
+> on a stale or missing `node_modules`, `npx` falls back to the public registry
+> and runs **whatever package holds the name there** (the `lychee-norm-cache`
+> name is squatted). Bare bin names in `npm run` scripts resolve locally or fail
+> loudly — they never touch the registry.
 
 `lychee-norm-cache` runs in the current directory (your site root) and forwards
 any extra arguments to lychee. Run either tool with `--help` for its full
