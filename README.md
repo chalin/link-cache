@@ -29,13 +29,13 @@ concurrent updates merging cleanly under git's normal 3-way merge.
   // Seeded pending my-org/repo#123; the target lands with that merge.
   "https://example.com/future-page/": {
     "status": 200,
-    "ts": 1788033998,
+    "when": "2026-08-29T20:06:38Z",
     "via": "manual",
     "expires": "2026-09-30",
   },
   "https://example.com/": {
     "status": 200,
-    "ts": 1788033998,
+    "when": "2026-08-29T20:06:38Z",
     "via": "lychee",
   },
 }
@@ -46,7 +46,11 @@ Each entry records:
 - **`status`** — generalized: positive values are HTTP statuses; `0` is
   unchecked; negative values are tool-specific errors (`-10` timeout, `-20`
   network/DNS, `-30` certificate, `-40` generic client error).
-- **`ts`** — unix seconds of the last verification.
+- **`when`** — the moment the status was established, as RFC3339 UTC at whole
+  seconds (`YYYY-MM-DDTHH:MM:SSZ`), converting exactly to and from lychee's
+  epoch-seconds cache timestamps. The form is strict — no fractional seconds, no
+  offsets — so timestamps are byte-comparable and lexicographically
+  chronological.
 - **`via`** — the resolver that set the status: `lychee`, `manual`
   (hand-seeded), or a named specialized resolver (e.g. a browser-grade probe).
 - **`expires`** (optional, `manual` entries) — `YYYY-MM-DD`. Until then the

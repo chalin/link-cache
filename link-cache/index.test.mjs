@@ -256,19 +256,19 @@ test('runOps without a prune does not rewrite the file', () => {
 const A_BLOCK = `  // seed rationale
   "https://a.example/": {
     "status": 206,
-    "ts": ${NOW - 400 * DAY},
+    "when": "2000-08-05T01:46:40Z",
     "via": "manual",
   },
 `;
 const B_BLOCK = `  "https://b.example/": {
     "status": 200,
-    "ts": ${NOW},
+    "when": "2001-09-09T01:46:40Z",
     "via": "lychee",
   },
 `;
 const C_BLOCK = `  "https://c.example/": {
     "status": 200,
-    "ts": ${NOW - 10 * DAY},
+    "when": "2001-08-30T01:46:40Z",
     "via": "browser",
   },
 `;
