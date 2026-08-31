@@ -60,7 +60,11 @@ npm run check:links -- --migrate   # .lycheecache -> link-cache.jsonc
 
 then commit `link-cache.jsonc` and gitignore `.lycheecache`. If the cache has a
 `merge=union` gitattribute, move it to `link-cache.jsonc` (duplicate lines from
-union merges are benign: the next run dedupes, newest entry wins).
+union merges are benign: the next run dedupes, newest entry wins). Exclude the
+file from code formatters (e.g. add it to `.prettierignore`): it is
+pretty-printed by construction, and a formatter would reflow the long entry
+lines, breaking the one-entry-per-line contract that union merges and
+comment-preserving rewrites depend on.
 
 ## Exit codes (`lychee-norm-cache`)
 
