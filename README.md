@@ -148,10 +148,12 @@ forwards (e.g. `--offline`, `--max-cache-age 0`).
 ## Development
 
 The published CLIs have **zero runtime dependencies**; Prettier is the only dev
-dependency. Run the checks (format + tests) with:
+dependency. The committed `.npmrc` applies the usual supply-chain controls
+(lock-exact installs, script execution default-deny, release cooldown). Run the
+checks (format + tests) with:
 
 ```sh
-npm install
+npm run install:safe
 npm run check
 ```
 

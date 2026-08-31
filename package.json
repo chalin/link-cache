@@ -29,6 +29,7 @@
     "check": "npm run check:format && npm test",
     "check:format": "prettier --check .",
     "fix:format": "prettier --write .",
+    "install:safe": "npm ci --ignore-scripts --no-audit --no-fund",
     "test": "node --test"
   },
   "prettier": {

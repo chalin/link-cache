@@ -17,6 +17,5 @@ jobs:
         with:
           node-version: 24
           cache: npm
-          cache-dependency-path: package.json
-      - run: npm install
+      - run: npm run install:safe
       - run: npm run check
