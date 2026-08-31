@@ -289,7 +289,9 @@ test('owned summary includes a via breakdown', () => {
   assert.match(output, /lychee\s+1/, 'lychee counted');
 });
 
-test('owned prune drops the oldest entry with its comment', () => {
+test('owned prune skips manual entries and drops the oldest lychee-verified one', () => {
+  // The manual seed (a) is the oldest overall; pruning schedules re-checks
+  // for verified entries, so the oldest non-manual entry (c) goes instead.
   const parsed = parseOwnedCache(OWNED_SAMPLE);
   const { writeText, pruned } = runOps(
     parsed,
@@ -299,9 +301,13 @@ test('owned prune drops the oldest entry with its comment', () => {
     },
   );
   assert.equal(pruned, 1, 'one entry pruned');
-  assert.ok(!writeText.includes('a.example'), 'oldest entry is gone');
-  assert.ok(!writeText.includes('seed rationale'), 'its comment goes with it');
-  assert.match(writeText, /c\.example/, 'surviving entries remain');
+  assert.match(writeText, /a\.example/, 'the older manual seed survives');
+  assert.match(writeText, /seed rationale/, 'its comment survives with it');
+  assert.ok(
+    !writeText.includes('c.example'),
+    'oldest non-manual entry is gone',
+  );
+  assert.match(writeText, /b\.example/, 'newer entries remain');
 });
 
 test('owned prune preserves surviving entries byte-identically', () => {
@@ -311,8 +317,23 @@ test('owned prune preserves surviving entries byte-identically', () => {
   });
   assert.equal(
     writeText,
-    `{\n${B_BLOCK}${C_BLOCK}}\n`,
+    `{\n${A_BLOCK}${B_BLOCK}}\n`,
     'survivor blocks are byte-identical, pruned block is gone',
+  );
+});
+
+test('a 100% prune leaves manual entries standing', () => {
+  const parsed = parseOwnedCache(OWNED_SAMPLE);
+  const { writeText, pruned } = runOps(
+    parsed,
+    [{ kind: 'prune', value: '100%' }],
+    { now: NOW },
+  );
+  assert.equal(pruned, 2, 'both non-manual entries pruned');
+  assert.equal(
+    writeText,
+    `{\n${A_BLOCK}}\n`,
+    'the manual seed is the sole survivor',
   );
 });
 

@@ -8,8 +8,9 @@ Two tools:
   the committed `link-cache.jsonc` cache and lychee's derived `.lycheecache` in
   sync.
 - **`link-cache`** — inspect and prune the cache: list the oldest entries, prune
-  a count or percentage (optionally scoped by URL regex), or print a summary
-  (status, provenance, ages). (`refcache` is a deprecated alias.)
+  a count or percentage (optionally scoped by URL regex; `manual` entries are
+  exempt — they retire via their `expires` date), or print a summary (status,
+  provenance, ages). (`refcache` is a deprecated alias.)
 
 With a committed `lychee.toml` and `link-cache.jsonc`, these give a site a
 self-contained, cached link-checking setup: fast reruns, and diffs that reflect

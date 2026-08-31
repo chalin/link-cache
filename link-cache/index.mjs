@@ -244,7 +244,12 @@ export function runOps(
     if (op.kind === 'list') {
       out.push(formatList(current(), Number(op.value), { now }));
     } else if (op.kind === 'prune') {
-      const cur = current();
+      // Manual entries are exempt: pruning schedules re-checks for
+      // lychee-verified entries, while a manual entry's lifecycle is owned by
+      // its author and its `expires` date — and under prune-refresh rotation
+      // re-confirmed seeds keep their original timestamp, so they'd otherwise
+      // age to the front and get evicted mid-lifecycle.
+      const cur = current().filter((e) => e.via !== 'manual');
       const k = resolvePruneCount(op.value, cur.length);
       for (const victim of selectOldest(cur, k)) removed.add(victim.index);
       pruned += k;
@@ -351,7 +356,8 @@ while \`-p 5 -l 5\` lists the next 5 after pruning.
 
   -l, --list NUM        list the NUM oldest entries
   -m, --match REGEX     scope all operations to URLs matching REGEX
-  -p, --prune NUM[%]    drop the NUM (or NUM%) oldest entries, then rewrite
+  -p, --prune NUM[%]    drop the NUM (or NUM%) oldest non-manual entries, then
+                        rewrite (manual entries retire via their expires date)
   -s, --summary         print a summary (counts, ages, status, via, histogram)
   -h, --help            show this help
 
