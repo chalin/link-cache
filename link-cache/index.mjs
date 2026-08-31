@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-// The `refcache` bin: inspect and prune a link cache — the owned JSONC cache
-// (link-cache.jsonc) or a legacy Lychee CSV (.lycheecache). Read-only unless
-// `--prune` is given, and never hits the network. Run with `--help` for usage.
+// The `link-cache` bin (deprecated alias: `refcache`): inspect and prune a
+// link cache — the owned JSONC cache (link-cache.jsonc) or a legacy Lychee CSV
+// (.lycheecache). Read-only unless `--prune` is given, and never hits the
+// network. Run with `--help` for usage.
 //
 // CSV line format: URL,STATUS,UNIX_TIMESTAMP — the URL is CSV-quoted when it
 // contains a comma, so STATUS and TIMESTAMP are read from the final two fields.
@@ -338,7 +339,7 @@ export function parseArgs(argv) {
   return { ops, path, match, help };
 }
 
-const USAGE = `Usage: refcache [CACHE_FILE] [options]
+const USAGE = `Usage: link-cache [CACHE_FILE] [options]
 
 Inspect and prune a link cache: the owned ${OWNED_FILE} (default when present)
 or a legacy Lychee CSV like ${CSV_FILE}. Options run in the order given, over
@@ -409,5 +410,11 @@ function isEntryPoint() {
 }
 
 if (isEntryPoint()) {
+  // Deprecation notice when invoked through the legacy alias bin.
+  if (process.argv[1]?.endsWith('refcache')) {
+    process.stderr.write(
+      '[warn] the refcache bin is deprecated; use link-cache instead.\n',
+    );
+  }
   main(process.argv.slice(2));
 }

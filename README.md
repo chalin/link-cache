@@ -7,8 +7,9 @@ Two tools:
 - **`lychee-norm-cache`** — run lychee over your built `public/` output, keeping
   the committed `link-cache.jsonc` cache and lychee's derived `.lycheecache` in
   sync.
-- **`refcache`** — inspect and prune the cache: list the oldest entries, prune a
-  count or percentage, or print a summary (status, provenance, ages).
+- **`link-cache`** — inspect and prune the cache: list the oldest entries, prune
+  a count or percentage (optionally scoped by URL regex), or print a summary
+  (status, provenance, ages). (`refcache` is a deprecated alias.)
 
 With a committed `lychee.toml` and `link-cache.jsonc`, these give a site a
 self-contained, cached link-checking setup: fast reruns, and diffs that only
@@ -114,14 +115,14 @@ Wire the bins into your `package.json` scripts (bare names — `npm run` puts
 ```json
 "scripts": {
   "check:links": "lychee-norm-cache",
-  "refcache": "refcache"
+  "link-cache": "link-cache"
 }
 ```
 
 ```sh
-npm run check:links            # sync caches, run lychee, fold results back
-npm run refcache -- --summary  # cache stats (count, oldest, status, via, ages)
-npm run refcache -- --match 'github\.com' --prune 10   # trim 10 oldest matching
+npm run check:links              # sync caches, run lychee, fold results back
+npm run link-cache -- --summary  # cache stats (count, oldest, status, via, ages)
+npm run link-cache -- --match 'github\.com' --prune 10  # trim 10 oldest matching
 ```
 
 > [!WARNING]

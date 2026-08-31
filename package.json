@@ -1,7 +1,7 @@
 {
   "name": "link-cache",
   "version": "0.4.0",
-  "description": "Zero-dependency helper CLIs for cached Lychee link-checking around an owned JSONC cache (link-cache.jsonc) with provenance: lychee-norm-cache (run + sync caches) and refcache (inspect/prune).",
+  "description": "Zero-dependency helper CLIs for cached Lychee link-checking around an owned JSONC cache (link-cache.jsonc) with provenance: lychee-norm-cache (run + sync caches) and link-cache (inspect/prune).",
   "keywords": [
     "lychee",
     "link-checker",
@@ -17,12 +17,13 @@
   "type": "module",
   "bin": {
     "lychee-norm-cache": "check/index.mjs",
-    "refcache": "refcache/index.mjs"
+    "link-cache": "link-cache/index.mjs",
+    "refcache": "link-cache/index.mjs"
   },
   "files": [
     "check/index.mjs",
     "lib/cache.mjs",
-    "refcache/index.mjs"
+    "link-cache/index.mjs"
   ],
   "scripts": {
     "check": "npm run check:format && npm test",

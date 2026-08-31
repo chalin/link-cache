@@ -367,7 +367,31 @@ test(
   { skip: process.platform === 'win32' ? 'POSIX symlink bins only' : false },
   () => {
     // A naive `file://${argv[1]}` guard misses the symlink and silently skips
-    // main(), so `npx refcache` would do nothing.
+    // main(), so `npx link-cache` would do nothing.
+    const script = fileURLToPath(new URL('./index.mjs', import.meta.url));
+    const dir = mkdtempSync(join(tmpdir(), 'link-cache-'));
+    const link = join(dir, 'link-cache');
+    symlinkSync(script, link);
+    try {
+      const r = spawnSync(process.execPath, [link, '--help'], {
+        encoding: 'utf8',
+      });
+      assert.equal(r.status, 0, 'help exits 0');
+      assert.match(r.stdout, /Usage: link-cache/, 'main ran via the symlink');
+      assert.ok(
+        !r.stderr.includes('deprecated'),
+        'the canonical bin name runs without a deprecation notice',
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
+  'the refcache alias runs with a deprecation notice',
+  { skip: process.platform === 'win32' ? 'POSIX symlink bins only' : false },
+  () => {
     const script = fileURLToPath(new URL('./index.mjs', import.meta.url));
     const dir = mkdtempSync(join(tmpdir(), 'refcache-'));
     const link = join(dir, 'refcache');
@@ -376,8 +400,13 @@ test(
       const r = spawnSync(process.execPath, [link, '--help'], {
         encoding: 'utf8',
       });
-      assert.equal(r.status, 0, 'help exits 0');
-      assert.match(r.stdout, /Usage: refcache/, 'main ran via the symlink');
+      assert.equal(r.status, 0, 'the alias still works');
+      assert.match(r.stdout, /Usage: link-cache/, 'main ran via the alias');
+      assert.match(
+        r.stderr,
+        /refcache bin is deprecated/,
+        'the alias names its replacement',
+      );
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
