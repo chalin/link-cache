@@ -20,23 +20,25 @@ real changes — link statuses, and check recency for freshly re-verified entrie
 The committed source of truth is `link-cache.jsonc` — a JSONC file,
 pretty-printed by construction in Prettier's style (so `prettier --check` passes
 it untouched), one multi-line object per URL, sorted, with `//` comments allowed
-on their own lines (each comment attaches to the entry below it and survives
-rewrites). The multi-line shape is deliberate: field-per-line entries keep
-concurrent updates merging cleanly under git's normal 3-way merge.
+on their own lines. Each comment attaches to the entry below it and survives
+rewrites for as long as the entry's status holds; a status change replaces the
+entry and retires its comments (a stale rationale is worse than none). The
+multi-line shape is deliberate: field-per-line entries keep concurrent updates
+merging cleanly under git's normal 3-way merge.
 
 ```jsonc
 {
+  "https://example.com/": {
+    "status": 200,
+    "when": "2026-08-29T20:06:38Z",
+    "via": "lychee",
+  },
   // Seeded pending my-org/repo#123; the target lands with that merge.
   "https://example.com/future-page/": {
     "status": 200,
     "when": "2026-08-29T20:06:38Z",
     "via": "manual",
     "expires": "2026-09-30",
-  },
-  "https://example.com/": {
-    "status": 200,
-    "when": "2026-08-29T20:06:38Z",
-    "via": "lychee",
   },
 }
 ```

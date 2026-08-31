@@ -92,20 +92,28 @@ export function publicDirOf(cwd) {
   return publicDir;
 }
 
-// Total link count from lychee's stdout summary — the human one ("🔍 1234
-// Total (in 3s) …") or --format json ("total": 1234); null when neither is
-// present (an unrecognized format is not treated as zero).
-export function parseTotalChecked(stdout) {
-  const m =
-    /(\d+)\s+Total\b/.exec(stdout) ?? /"total"\s*:\s*(\d+)/.exec(stdout);
-  return m ? Number(m[1]) : null;
+// Check counts from lychee's stdout summary — the human line ("🔍 2 Total …
+// ✅ 1 OK 🚫 0 Errors …") or --format json fields; null when neither is
+// present. A parsed summary is the proof that a check actually completed.
+export function parseSummary(stdout) {
+  const m = /(\d+)\s+Total\b[\s\S]*?(\d+)\s+OK\b[\s\S]*?(\d+)\s+Errors?\b/.exec(
+    stdout,
+  );
+  if (m) return { total: +m[1], ok: +m[2], errors: +m[3] };
+  const total = /"total"\s*:\s*(\d+)/.exec(stdout);
+  const ok = /"successful"\s*:\s*(\d+)/.exec(stdout);
+  const errors = /"errors"\s*:\s*(\d+)/.exec(stdout);
+  return total && ok && errors
+    ? { total: +total[1], ok: +ok[1], errors: +errors[1] }
+    : null;
 }
 
-// Map lychee's exit code (0 ok, 2 broken links, other = config/runtime error)
-// to ours (0 ok, 1 dead links, 2 preflight).
-export function mapLycheeExit(code) {
+// Map lychee's exit code to ours (0 ok, 1 dead links, 2 preflight). Lychee
+// exits 2 both for broken links and for argument errors; only a parsed
+// summary (the check completed) makes it a dead-links result.
+export function mapLycheeExit(code, summary) {
   if (code === 0) return EXIT_OK;
-  if (code === 2) return EXIT_DEAD_LINKS;
+  if (code === 2 && summary) return EXIT_DEAD_LINKS;
   return EXIT_PREFLIGHT;
 }
 
@@ -133,11 +141,15 @@ function migrate(cwd) {
   const { text, count, malformed } = migrateCsvText(
     readFileSync(csvPath, 'utf8'),
   );
+  // Migration is specified lossless: refuse rather than silently drop.
+  if (malformed) {
+    return fail(
+      `${CSV_FILE} has ${malformed} malformed line(s); fix or remove them, then rerun.`,
+    );
+  }
   writeFileSync(ownedPath, text);
   console.log(
-    `Migrated ${count} entries to ${OWNED_FILE}` +
-      (malformed ? ` (${malformed} malformed lines skipped)` : '') +
-      `. Commit it and gitignore ${CSV_FILE}.`,
+    `Migrated ${count} entries to ${OWNED_FILE}. Commit it and gitignore ${CSV_FILE}.`,
   );
   return EXIT_OK;
 }
@@ -167,6 +179,16 @@ function main(argv) {
     : null;
   const now = Date.now() / 1000;
 
+  // The owned-cache lens requires lychee's cache; enforce rather than let a
+  // cacheless run erase every projected entry on merge-back.
+  const hasCacheFlag = argv.some(
+    (a) => a === '--cache' || a.startsWith('--cache='),
+  );
+  if (owned && argv.includes('--cache=false')) {
+    return fail(`--cache=false is incompatible with ${OWNED_FILE}.`);
+  }
+  const cacheArgs = hasCacheFlag ? [] : ['--cache'];
+
   // Derive the CSV lychee will read from the owned cache.
   if (owned) {
     writeFileSync(
@@ -176,41 +198,62 @@ function main(argv) {
   }
 
   const token = resolveToken();
-  // stdout is captured for the zero-links sanity check and echoed afterwards;
-  // stderr (progress) still streams.
+  // stdout is captured for the completion/zero-check sanity checks and echoed
+  // afterwards; stderr (progress) still streams. The generous buffer bound
+  // keeps spawnSync simple; overruns surface via run.error below.
   const run = spawnSync(
     'lychee',
-    ['--config', 'lychee.toml', '--root-dir', publicDir, ...argv, publicDir],
+    [
+      '--config',
+      'lychee.toml',
+      ...cacheArgs,
+      '--root-dir',
+      publicDir,
+      ...argv,
+      publicDir,
+    ],
     {
       stdio: ['inherit', 'pipe', 'inherit'],
       encoding: 'utf8',
+      maxBuffer: 64 * 1024 * 1024,
       env: { ...process.env, GITHUB_TOKEN: token },
     },
   );
   if (run.stdout) process.stdout.write(run.stdout);
-  const status = mapLycheeExit(run.status ?? 1);
+  if (run.error) {
+    return fail(`lychee failed to run: ${run.error.message}`);
+  }
+  const summary = parseSummary(run.stdout ?? '');
+  const status = mapLycheeExit(run.status ?? 1, summary);
 
-  // Fold the post-run CSV back into the owned cache (even on dead links, so a
-  // partial run still leaves a stable, truthful cache), or normalize the CSV
-  // in place in legacy mode.
+  // On a preflight failure lychee produced no trustworthy results: leave both
+  // caches untouched (folding would mislabel unprojected entries as failed).
+  if (status === EXIT_PREFLIGHT) {
+    return fail('lychee did not complete a check; caches left untouched.');
+  }
+
+  // A clean run in which nothing got a verdict is a false-clean (empty or
+  // fully-excluded public/), not a success — and folding it would mislabel
+  // unattempted entries as failed, so the check precedes the fold. Cache hits
+  // count toward OK in lychee's summary, so a fully-cached run passes.
+  if (status === EXIT_OK && summary && summary.ok + summary.errors === 0) {
+    return fail('lychee verified 0 links: empty or fully-excluded public/?');
+  }
+
+  // Fold the post-run CSV back into the owned cache (also on dead links, so a
+  // completed run with failures still leaves a stable, truthful cache), or
+  // normalize the CSV in place in legacy mode.
   if (owned) {
-    const csv = existsSync(cachePath)
-      ? parseCsv(readFileSync(cachePath, 'utf8'))
-      : { entries: [] };
+    const csvEntries = existsSync(cachePath)
+      ? parseCsv(readFileSync(cachePath, 'utf8')).entries
+      : [];
     writeFileSync(
       ownedPath,
-      serializeOwned(mergeBack(owned, csv.entries, { now })),
+      serializeOwned(mergeBack(owned, csvEntries, { now })),
     );
     writeFileSync(cachePath, sortCacheText(readFileSync(cachePath, 'utf8')));
   } else if (existsSync(cachePath)) {
     writeFileSync(cachePath, sortCacheText(readFileSync(cachePath, 'utf8')));
-  }
-
-  // A clean run that checked nothing is a false-clean (empty or fully-excluded
-  // public/), not a success.
-  const total = parseTotalChecked(run.stdout ?? '');
-  if (status === EXIT_OK && total === 0) {
-    return fail('lychee checked 0 links: empty or fully-excluded public/?');
   }
 
   return status;
@@ -227,5 +270,12 @@ function isEntryPoint() {
 }
 
 if (isEntryPoint()) {
-  process.exit(main(process.argv.slice(2)));
+  // Wrapper exceptions (e.g. a malformed owned cache) are preflight failures,
+  // not dead links: warn wrappers must not swallow them.
+  try {
+    process.exit(main(process.argv.slice(2)));
+  } catch (err) {
+    process.stderr.write(`[error] ${err.message}\n`);
+    process.exit(EXIT_PREFLIGHT);
+  }
 }

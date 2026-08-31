@@ -1,6 +1,5 @@
-// Tests for the Lychee refcache helper (list / prune / summary). See the
-// maintainers' link-checking notes (internal ref `link-checking/lychee`; ask
-// the dev lead) for rationale.
+// Tests for the link-cache bin (list / prune / summary) over both cache
+// formats, and for its deprecated refcache alias.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -399,27 +398,18 @@ test(
   },
 );
 
-test(
-  'the refcache alias runs with a deprecation notice',
-  { skip: process.platform === 'win32' ? 'POSIX symlink bins only' : false },
-  () => {
-    const script = fileURLToPath(new URL('./index.mjs', import.meta.url));
-    const dir = mkdtempSync(join(tmpdir(), 'refcache-'));
-    const link = join(dir, 'refcache');
-    symlinkSync(script, link);
-    try {
-      const r = spawnSync(process.execPath, [link, '--help'], {
-        encoding: 'utf8',
-      });
-      assert.equal(r.status, 0, 'the alias still works');
-      assert.match(r.stdout, /Usage: link-cache/, 'main ran via the alias');
-      assert.match(
-        r.stderr,
-        /refcache bin is deprecated/,
-        'the alias names its replacement',
-      );
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  },
-);
+test('the refcache alias wrapper warns and delegates', () => {
+  // A dedicated wrapper file, not an argv[1] sniff: works under npm's Windows
+  // shims too, so this test runs on every platform.
+  const script = fileURLToPath(new URL('./refcache.mjs', import.meta.url));
+  const r = spawnSync(process.execPath, [script, '--help'], {
+    encoding: 'utf8',
+  });
+  assert.equal(r.status, 0, 'the alias still works');
+  assert.match(r.stdout, /Usage: link-cache/, 'main ran via the alias');
+  assert.match(
+    r.stderr,
+    /refcache bin is deprecated/,
+    'the alias names its replacement',
+  );
+});

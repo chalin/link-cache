@@ -356,7 +356,7 @@ while \`-p 5 -l 5\` lists the next 5 after pruning.
 
 With no options, prints the summary. A flag may not be repeated.`;
 
-function main(argv) {
+export function main(argv) {
   let args;
   try {
     args = parseArgs(argv);
@@ -412,11 +412,5 @@ function isEntryPoint() {
 }
 
 if (isEntryPoint()) {
-  // Deprecation notice when invoked through the legacy alias bin.
-  if (process.argv[1]?.endsWith('refcache')) {
-    process.stderr.write(
-      '[warn] the refcache bin is deprecated; use link-cache instead.\n',
-    );
-  }
   main(process.argv.slice(2));
 }

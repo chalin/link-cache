@@ -18,12 +18,13 @@
   "bin": {
     "lychee-norm-cache": "check/index.mjs",
     "link-cache": "link-cache/index.mjs",
-    "refcache": "link-cache/index.mjs"
+    "refcache": "link-cache/refcache.mjs"
   },
   "files": [
     "check/index.mjs",
     "lib/cache.mjs",
-    "link-cache/index.mjs"
+    "link-cache/index.mjs",
+    "link-cache/refcache.mjs"
   ],
   "scripts": {
     "check": "npm run check:format && npm test",
