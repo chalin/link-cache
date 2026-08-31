@@ -221,13 +221,20 @@ export function formatStats(stats, { now = Date.now() / 1000, path } = {}) {
 
 // --- ordered execution -----------------------------------------------------
 
-// Run the parsed ops in order over the evolving cache. Pure: returns the text to
-// print and the text to write (null when nothing was pruned); no I/O.
-export function runOps(parsed, ops, { now = Date.now() / 1000, path } = {}) {
+// Run the parsed ops in order over the evolving cache, optionally scoped to
+// URLs matching `match`. Pure: returns the text to print and the text to write
+// (null when nothing was pruned); no I/O.
+export function runOps(
+  parsed,
+  ops,
+  { now = Date.now() / 1000, path, match = null } = {},
+) {
   const removed = new Set();
   let pruned = 0;
   const out = [];
-  const current = () => parsed.entries.filter((e) => !removed.has(e.index));
+  const inScope = (e) => (match ? match.test(e.url) : true);
+  const current = () =>
+    parsed.entries.filter((e) => !removed.has(e.index) && inScope(e));
 
   for (const op of ops) {
     if (op.kind === 'list') {
@@ -252,11 +259,15 @@ export function runOps(parsed, ops, { now = Date.now() / 1000, path } = {}) {
 
   let writeText = null;
   if (pruned > 0) {
+    // Survivors are all unpruned entries — including those outside the
+    // --match scope, which the scope only shields from ops, never from the
+    // rewrite.
+    const survivors = parsed.entries.filter((e) => !removed.has(e.index));
     if (parsed.kind === 'owned') {
       // Comments of surviving entries travel with them; pruned entries take
       // their comment lines along.
       writeText = serializeOwned({
-        entries: current().map((e) => e.src),
+        entries: survivors.map((e) => e.src),
         trailing: parsed.owned.trailing,
       });
     } else {
@@ -271,6 +282,8 @@ export function runOps(parsed, ops, { now = Date.now() / 1000, path } = {}) {
 const FLAGS = new Map([
   ['-l', 'list'],
   ['--list', 'list'],
+  ['-m', 'match'],
+  ['--match', 'match'],
   ['-p', 'prune'],
   ['--prune', 'prune'],
   ['-s', 'summary'],
@@ -281,6 +294,7 @@ export function parseArgs(argv) {
   const ops = [];
   const seen = new Set();
   let path = null;
+  let match = null;
   let help = false;
 
   for (let i = 0; i < argv.length; i++) {
@@ -299,6 +313,14 @@ export function parseArgs(argv) {
       }
       const value = argv[++i];
       if (value === undefined) throw new Error(`${a} requires a value`);
+      if (kind === 'match') {
+        try {
+          match = new RegExp(value);
+        } catch (err) {
+          throw new Error(`--match needs a valid regex: ${err.message}`);
+        }
+        continue;
+      }
       if (kind === 'list' && !/^\d+$/.test(value)) {
         throw new Error(`--list needs a count, got: ${value}`);
       }
@@ -313,7 +335,7 @@ export function parseArgs(argv) {
     path = a;
   }
 
-  return { ops, path, help };
+  return { ops, path, match, help };
 }
 
 const USAGE = `Usage: refcache [CACHE_FILE] [options]
@@ -324,6 +346,7 @@ the evolving cache, so \`-l 5 -p 5\` lists the 5 oldest about to be pruned,
 while \`-p 5 -l 5\` lists the next 5 after pruning.
 
   -l, --list NUM        list the NUM oldest entries
+  -m, --match REGEX     scope all operations to URLs matching REGEX
   -p, --prune NUM[%]    drop the NUM (or NUM%) oldest entries, then rewrite
   -s, --summary         print a summary (counts, ages, status, via, histogram)
   -h, --help            show this help
@@ -365,7 +388,11 @@ function main(argv) {
 
   const now = Date.now() / 1000;
   const ops = args.ops.length ? args.ops : [{ kind: 'summary' }];
-  const { output, writeText } = runOps(parsed, ops, { now, path });
+  const { output, writeText } = runOps(parsed, ops, {
+    now,
+    path,
+    match: args.match,
+  });
 
   if (output) console.log(output);
   if (writeText !== null) writeFileSync(path, writeText);

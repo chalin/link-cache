@@ -253,13 +253,26 @@ test('runOps without a prune does not rewrite the file', () => {
 
 // --- owned-format (link-cache.jsonc) support ---
 
-const OWNED_SAMPLE = `{
-  // seed rationale
-  "https://a.example/": { "status": 206, "ts": ${NOW - 400 * DAY}, "via": "manual" },
-  "https://b.example/": { "status": 200, "ts": ${NOW}, "via": "lychee" },
-  "https://c.example/": { "status": 200, "ts": ${NOW - 10 * DAY}, "via": "browser" },
-}
+const A_BLOCK = `  // seed rationale
+  "https://a.example/": {
+    "status": 206,
+    "ts": ${NOW - 400 * DAY},
+    "via": "manual",
+  },
 `;
+const B_BLOCK = `  "https://b.example/": {
+    "status": 200,
+    "ts": ${NOW},
+    "via": "lychee",
+  },
+`;
+const C_BLOCK = `  "https://c.example/": {
+    "status": 200,
+    "ts": ${NOW - 10 * DAY},
+    "via": "browser",
+  },
+`;
+const OWNED_SAMPLE = `{\n${A_BLOCK}${B_BLOCK}${C_BLOCK}}\n`;
 
 test('parseOwnedCache adapts owned entries to the common shape', () => {
   const parsed = parseOwnedCache(OWNED_SAMPLE);
@@ -293,16 +306,58 @@ test('owned prune drops the oldest entry with its comment', () => {
 });
 
 test('owned prune preserves surviving entries byte-identically', () => {
-  const survivorLines = OWNED_SAMPLE.split('\n').filter(
-    (l) => l.includes('b.example') || l.includes('c.example'),
-  );
   const parsed = parseOwnedCache(OWNED_SAMPLE);
   const { writeText } = runOps(parsed, [{ kind: 'prune', value: '1' }], {
     now: NOW,
   });
-  for (const line of survivorLines) {
-    assert.ok(writeText.includes(line), `survivor line intact: ${line.trim()}`);
-  }
+  assert.equal(
+    writeText,
+    `{\n${B_BLOCK}${C_BLOCK}}\n`,
+    'survivor blocks are byte-identical, pruned block is gone',
+  );
+});
+
+// --- --match scoping ---
+
+test('match scopes list and summary to matching URLs', () => {
+  const parsed = parseOwnedCache(OWNED_SAMPLE);
+  const { output } = runOps(
+    parsed,
+    [{ kind: 'list', value: '5' }, { kind: 'summary' }],
+    { now: NOW, match: /b\.example/ },
+  );
+  assert.match(output, /b\.example/, 'matching entry listed');
+  assert.ok(!output.includes('a.example'), 'non-matching entry not listed');
+  assert.match(output, /Entries: 1/, 'summary counts matches only');
+});
+
+test('match scopes prune but never drops out-of-scope entries on rewrite', () => {
+  const parsed = parseOwnedCache(OWNED_SAMPLE);
+  // a is the oldest overall, but only c matches: c is pruned, a and b survive.
+  const { writeText, pruned } = runOps(
+    parsed,
+    [{ kind: 'prune', value: '1' }],
+    { now: NOW, match: /c\.example/ },
+  );
+  assert.equal(pruned, 1, 'one matching entry pruned');
+  assert.equal(
+    writeText,
+    `{\n${A_BLOCK}${B_BLOCK}}\n`,
+    'out-of-scope entries survive the rewrite',
+  );
+});
+
+test('parseArgs compiles --match and rejects an invalid regex', () => {
+  assert.equal(
+    parseArgs(['-m', 'foo.*']).match.source,
+    'foo.*',
+    'regex compiled',
+  );
+  assert.throws(
+    () => parseArgs(['--match', '(']),
+    /--match needs a valid regex/,
+    'invalid regex is rejected',
+  );
 });
 
 // --- CLI entry point ---

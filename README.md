@@ -16,9 +16,12 @@ change when links actually change.
 
 ## The owned cache: `link-cache.jsonc`
 
-The committed source of truth is `link-cache.jsonc` — a line-disciplined JSONC
-file, one URL entry per line, sorted, with `//` comments allowed on their own
-lines (each comment attaches to the entry below it and survives rewrites):
+The committed source of truth is `link-cache.jsonc` — a JSONC file,
+pretty-printed by construction in Prettier's style (so `prettier --check` passes
+it untouched), one multi-line object per URL, sorted, with `//` comments allowed
+on their own lines (each comment attaches to the entry below it and survives
+rewrites). The multi-line shape is deliberate: field-per-line entries keep
+concurrent updates merging cleanly under git's normal 3-way merge.
 
 ```jsonc
 {
@@ -29,7 +32,11 @@ lines (each comment attaches to the entry below it and survives rewrites):
     "via": "manual",
     "expires": "2026-09-30",
   },
-  "https://example.com/": { "status": 200, "ts": 1788033998, "via": "lychee" },
+  "https://example.com/": {
+    "status": 200,
+    "ts": 1788033998,
+    "via": "lychee",
+  },
 }
 ```
 
@@ -58,13 +65,12 @@ normalize the committed `.lycheecache` in place. To migrate:
 npm run check:links -- --migrate   # .lycheecache -> link-cache.jsonc
 ```
 
-then commit `link-cache.jsonc` and gitignore `.lycheecache`. If the cache has a
-`merge=union` gitattribute, move it to `link-cache.jsonc` (duplicate lines from
-union merges are benign: the next run dedupes, newest entry wins). Exclude the
-file from code formatters (e.g. add it to `.prettierignore`): it is
-pretty-printed by construction, and a formatter would reflow the long entry
-lines, breaking the one-entry-per-line contract that union merges and
-comment-preserving rewrites depend on.
+then commit `link-cache.jsonc` and gitignore `.lycheecache`. If the CSV cache
+carried a `merge=union` gitattribute, drop it rather than moving it over: union
+merging proved ineffective in practice, and on a multi-line file it can
+interleave entries into invalid JSON. The owned cache merges with git's normal
+3-way merge; on a conflict, resolve either way and rerun the check — the next
+run re-normalizes the file.
 
 ## Exit codes (`lychee-norm-cache`)
 
@@ -113,17 +119,18 @@ Wire the bins into your `package.json` scripts (bare names — `npm run` puts
 ```
 
 ```sh
-npm run check:links          # check links, then sort/normalize the cache
-npm run refcache -- --summary # cache stats (count, oldest, status, ages)
+npm run check:links            # sync caches, run lychee, fold results back
+npm run refcache -- --summary  # cache stats (count, oldest, status, via, ages)
+npm run refcache -- --match 'github\.com' --prune 10   # trim 10 oldest matching
 ```
 
 > [!WARNING]
 >
-> Don't invoke these bins via `npx`: this package isn't on the npm registry, so
-> on a stale or missing `node_modules`, `npx` falls back to the public registry
-> and runs **whatever package holds the name there** (the `lychee-norm-cache`
-> name is squatted). Bare bin names in `npm run` scripts resolve locally or fail
-> loudly — they never touch the registry.
+> Don't invoke these bins via `npx`: on a stale or missing `node_modules`, `npx`
+> falls back to the public registry and runs **whatever package holds the bin's
+> name there** (the `lychee-norm-cache` name is squatted). Bare bin names in
+> `npm run` scripts resolve locally or fail loudly — they never touch the
+> registry.
 
 `lychee-norm-cache` runs in the current directory (your site root) and forwards
 any extra arguments to lychee. Run either tool with `--help` for its full
