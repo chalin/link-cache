@@ -1,31 +1,57 @@
 #!/usr/bin/env node
-// The `lychee-norm-cache` bin: run lychee over a built site and normalize
-// .lycheecache for byte-stable reruns. Runs in the cwd (the site root), so any
-// site with a lychee.toml can reuse it. Run with `--help` for usage.
+// The `lychee-norm-cache` bin: run lychee over a built site, maintained around
+// an owned JSONC cache (link-cache.jsonc, the committed source of truth) with
+// lychee's CSV .lycheecache derived from it. Falls back to legacy CSV-only
+// normalization when no owned cache exists. Run with `--help` for usage.
 //
 // When GITHUB_TOKEN is unset, a token is bridged from the gh CLI — lychee reads
 // GITHUB_TOKEN, which also lifts the github.com rate limit; CI sets it directly.
+//
+// Exit codes: 0 success; 1 dead links; 2 preflight or sanity failure (lychee
+// or public/ missing, zero links checked, lychee config error).
 
 import { spawnSync } from 'node:child_process';
-import {
-  existsSync,
-  readFileSync,
-  realpathSync,
-  statSync,
-  writeFileSync,
-} from 'node:fs';
+import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import {
+  CSV_FILE,
+  OWNED_FILE,
+  mergeBack,
+  migrateCsvText,
+  parseCsv,
+  parseOwned,
+  projectToCsv,
+  serializeCsv,
+  serializeOwned,
+} from '../lib/cache.mjs';
+import { writeFileAtomic } from '../lib/write.mjs';
+
 const INSTALL_HINT = 'https://github.com/lycheeverse/lychee#installation';
 
-const USAGE = `Usage: lychee-norm-cache [lychee args...]
+export const EXIT_OK = 0;
+export const EXIT_DEAD_LINKS = 1;
+export const EXIT_PREFLIGHT = 2;
 
-Run lychee over this site's built ./public output, then normalize .lycheecache
-so reruns stay byte stable. Bridges a GitHub token from the gh CLI when
-GITHUB_TOKEN isn't set; extra arguments pass through to lychee.
+const USAGE = `Usage: lychee-norm-cache [--migrate] [lychee args...]
 
+Run lychee over this site's built ./public output. With a committed
+${OWNED_FILE}, the ${CSV_FILE} handed to lychee is derived from it before the
+run and folded back into it afterwards; otherwise ${CSV_FILE} is normalized in
+place (legacy mode). Bridges a GitHub token from the gh CLI when GITHUB_TOKEN
+isn't set; extra arguments pass through to lychee.
+
+  --migrate    convert an existing ${CSV_FILE} to ${OWNED_FILE} and exit
   -h, --help   show this help
+
+Exit codes: 0 success; 1 dead links; 2 preflight/sanity failure (missing
+lychee or public/, lychee config or usage errors, zero links verified).
+
+Lychee's summary must reach stdout in its default or JSON format — it is the
+wrapper's proof that a check completed — so flags that divert or reshape
+stdout (--output, --format junit, --dump-inputs, ...) are unsupported here;
+run lychee directly for those.
 
 Requires the lychee binary on your PATH and a lychee.toml at the site root.
 Run \`lychee --help\` for all link-checking options.`;
@@ -66,6 +92,61 @@ export function publicDirOf(cwd) {
   return publicDir;
 }
 
+// Check counts from lychee's stdout summary — the human line ("🔍 2 Total …
+// ✅ 1 OK 🚫 0 Errors …") or --format json fields; null when neither is
+// present. A parsed summary is the proof that a check actually completed.
+export function parseSummary(stdout) {
+  const m = /(\d+)\s+Total\b[\s\S]*?(\d+)\s+OK\b[\s\S]*?(\d+)\s+Errors?\b/.exec(
+    stdout,
+  );
+  if (m) return { total: +m[1], ok: +m[2], errors: +m[3] };
+  const total = /"total"\s*:\s*(\d+)/.exec(stdout);
+  const ok = /"successful"\s*:\s*(\d+)/.exec(stdout);
+  const errors = /"errors"\s*:\s*(\d+)/.exec(stdout);
+  return total && ok && errors
+    ? { total: +total[1], ok: +ok[1], errors: +errors[1] }
+    : null;
+}
+
+// Map lychee's exit code to ours (0 ok, 1 dead links, 2 preflight). A parsed
+// summary is required in every case: lychee exits 2 both for broken links and
+// for argument errors, and exits 0 from non-check modes (--dump-inputs) and
+// diverted-output runs (--output FILE, --format junit/detailed) — without the
+// summary there is no proof a check completed.
+export function mapLycheeExit(code, summary) {
+  if (!summary) return EXIT_PREFLIGHT;
+  if (code === 0) return EXIT_OK;
+  if (code === 2) return EXIT_DEAD_LINKS;
+  return EXIT_PREFLIGHT;
+}
+
+// URLs the run itself reported as failing — the human "[ERROR] URL …" lines,
+// or --format json's fail_map. Positive per-URL evidence for the merge-back's
+// failure recording; CSV absence alone proves nothing (cache_exclude_status,
+// max_cache_age, and site changes all remove entries from healthy runs).
+export function parseFailedUrls(stdout) {
+  const failed = new Set();
+  const trimmed = stdout.trim();
+  if (trimmed.startsWith('{')) {
+    try {
+      const failMap = JSON.parse(trimmed).fail_map ?? {};
+      for (const failures of Object.values(failMap)) {
+        for (const f of failures) {
+          const url = typeof f.url === 'string' ? f.url : f.url?.url;
+          if (url) failed.add(url);
+        }
+      }
+      return failed;
+    } catch {
+      // fall through to the line scan
+    }
+  }
+  for (const m of stdout.matchAll(/^\s*\[ERROR\]\s+(\S+)/gm)) {
+    failed.add(m[1]);
+  }
+  return failed;
+}
+
 // --- lychee invocation -----------------------------------------------------
 
 function ghAuthToken() {
@@ -77,39 +158,133 @@ function hasLychee() {
   return !spawnSync('lychee', ['--version'], { stdio: 'ignore' }).error;
 }
 
+function fail(message) {
+  process.stderr.write(`[help] ${message}\n`);
+  return EXIT_PREFLIGHT;
+}
+
+function migrate(cwd) {
+  const csvPath = path.join(cwd, CSV_FILE);
+  const ownedPath = path.join(cwd, OWNED_FILE);
+  if (existsSync(ownedPath)) return fail(`${OWNED_FILE} already exists.`);
+  if (!existsSync(csvPath)) return fail(`${CSV_FILE} not found.`);
+  const { text, count, malformed } = migrateCsvText(
+    readFileSync(csvPath, 'utf8'),
+  );
+  // Migration is specified lossless: refuse rather than silently drop.
+  if (malformed) {
+    return fail(
+      `${CSV_FILE} has ${malformed} malformed line(s); fix or remove them, then rerun.`,
+    );
+  }
+  writeFileAtomic(ownedPath, text);
+  console.log(
+    `Migrated ${count} entries to ${OWNED_FILE}. Commit it and gitignore ${CSV_FILE}.`,
+  );
+  return EXIT_OK;
+}
+
 function main(argv) {
   if (argv.includes('-h') || argv.includes('--help')) {
     console.log(USAGE);
-    return 0;
-  }
-
-  if (!hasLychee()) {
-    process.stderr.write(`[help] lychee not found. Install: ${INSTALL_HINT}\n`);
-    return 1;
+    return EXIT_OK;
   }
 
   const cwd = process.cwd();
+  if (argv.includes('--migrate')) return migrate(cwd);
+
+  if (!hasLychee()) {
+    return fail(`lychee not found. Install: ${INSTALL_HINT}`);
+  }
+
   const publicDir = publicDirOf(cwd);
   if (!publicDir) {
-    process.stderr.write(
-      `[help] ${path.join(cwd, 'public')} not found. Build the site first.\n`,
+    return fail(`${path.join(cwd, 'public')} not found. Build the site first.`);
+  }
+
+  const ownedPath = path.join(cwd, OWNED_FILE);
+  const cachePath = path.join(cwd, CSV_FILE);
+  const owned = existsSync(ownedPath)
+    ? parseOwned(readFileSync(ownedPath, 'utf8'))
+    : null;
+  const now = Date.now() / 1000;
+
+  // The owned-cache lens requires lychee's cache; enforce rather than let a
+  // cacheless run erase every projected entry on merge-back.
+  const hasCacheFlag = argv.some(
+    (a) => a === '--cache' || a.startsWith('--cache='),
+  );
+  if (owned && argv.includes('--cache=false')) {
+    return fail(`--cache=false is incompatible with ${OWNED_FILE}.`);
+  }
+  const cacheArgs = hasCacheFlag ? [] : ['--cache'];
+
+  // Derive the CSV lychee will read from the owned cache.
+  if (owned) {
+    writeFileAtomic(
+      cachePath,
+      serializeCsv(projectToCsv(owned.entries, { now })),
     );
-    return 1;
   }
 
   const token = resolveToken();
-  const status =
-    spawnSync(
-      'lychee',
-      ['--config', 'lychee.toml', '--root-dir', publicDir, ...argv, publicDir],
-      { stdio: 'inherit', env: { ...process.env, GITHUB_TOKEN: token } },
-    ).status ?? 1;
+  // stdout is captured for the completion/zero-check sanity checks and echoed
+  // afterwards; stderr (progress) still streams. The generous buffer bound
+  // keeps spawnSync simple; overruns surface via run.error below.
+  const run = spawnSync(
+    'lychee',
+    [
+      '--config',
+      'lychee.toml',
+      ...cacheArgs,
+      '--root-dir',
+      publicDir,
+      ...argv,
+      publicDir,
+    ],
+    {
+      stdio: ['inherit', 'pipe', 'inherit'],
+      encoding: 'utf8',
+      maxBuffer: 64 * 1024 * 1024,
+      env: { ...process.env, GITHUB_TOKEN: token },
+    },
+  );
+  if (run.stdout) process.stdout.write(run.stdout);
+  if (run.error) {
+    return fail(`lychee failed to run: ${run.error.message}`);
+  }
+  const summary = parseSummary(run.stdout ?? '');
+  const status = mapLycheeExit(run.status ?? 1, summary);
 
-  // Normalize the cache even on failure, so a partial run still leaves a stable
-  // .lycheecache.
-  const cachePath = path.join(cwd, '.lycheecache');
-  if (existsSync(cachePath)) {
-    writeFileSync(cachePath, sortCacheText(readFileSync(cachePath, 'utf8')));
+  // On a preflight failure lychee produced no trustworthy results: leave both
+  // caches untouched (folding would mislabel unprojected entries as failed).
+  if (status === EXIT_PREFLIGHT) {
+    return fail('lychee did not complete a check; caches left untouched.');
+  }
+
+  // A clean run in which nothing got a verdict is a false-clean (empty or
+  // fully-excluded public/), not a success — and folding it would mislabel
+  // unattempted entries as failed, so the check precedes the fold. Cache hits
+  // count toward OK in lychee's summary, so a fully-cached run passes.
+  if (status === EXIT_OK && summary && summary.ok + summary.errors === 0) {
+    return fail('lychee verified 0 links: empty or fully-excluded public/?');
+  }
+
+  // Fold the post-run CSV back into the owned cache (also on dead links, so a
+  // completed run with failures still leaves a stable, truthful cache), or
+  // normalize the CSV in place in legacy mode.
+  if (owned) {
+    const csvEntries = existsSync(cachePath)
+      ? parseCsv(readFileSync(cachePath, 'utf8')).entries
+      : [];
+    const failedUrls = parseFailedUrls(run.stdout ?? '');
+    writeFileAtomic(
+      ownedPath,
+      serializeOwned(mergeBack(owned, csvEntries, { now, failedUrls })),
+    );
+    writeFileAtomic(cachePath, sortCacheText(readFileSync(cachePath, 'utf8')));
+  } else if (existsSync(cachePath)) {
+    writeFileAtomic(cachePath, sortCacheText(readFileSync(cachePath, 'utf8')));
   }
 
   return status;
@@ -126,5 +301,12 @@ function isEntryPoint() {
 }
 
 if (isEntryPoint()) {
-  process.exit(main(process.argv.slice(2)));
+  // Wrapper exceptions (e.g. a malformed owned cache) are preflight failures,
+  // not dead links: warn wrappers must not swallow them.
+  try {
+    process.exit(main(process.argv.slice(2)));
+  } catch (err) {
+    process.stderr.write(`[error] ${err.message}\n`);
+    process.exit(EXIT_PREFLIGHT);
+  }
 }

@@ -1,6 +1,5 @@
-// Tests for the Lychee refcache helper (list / prune / summary). See the
-// maintainers' link-checking notes (internal ref `link-checking/lychee`; ask
-// the dev lead) for rationale.
+// Tests for the link-cache bin (list / prune / summary) over both cache
+// formats, and for its deprecated refcache alias.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -13,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 import {
   parseArgs,
   parseCache,
+  parseOwnedCache,
   resolvePruneCount,
   selectOldest,
   computeStats,
@@ -82,10 +82,10 @@ test('parseArgs validates the prune amount', () => {
   ]);
 });
 
-test('parseArgs defaults the path and yields no ops when none given', () => {
+test('parseArgs leaves the path null (resolved at run time) and yields no ops', () => {
   const { ops, path } = parseArgs([]);
   assert.deepEqual(ops, [], 'no flags means no ops');
-  assert.equal(path, '.lycheecache', 'default refcache path');
+  assert.equal(path, null, 'path resolution is deferred to main');
 });
 
 test('parseArgs captures a positional refcache path', () => {
@@ -187,7 +187,7 @@ test('formatStats reports the prune delta when entries were pruned', () => {
 
 test('runOps with list before prune lists the pre-prune oldest', () => {
   const parsed = parseCache(SAMPLE);
-  const { output, writeLines, pruned } = runOps(
+  const { output, writeText, pruned } = runOps(
     parsed,
     [
       { kind: 'list', value: '2' },
@@ -198,9 +198,13 @@ test('runOps with list before prune lists the pre-prune oldest', () => {
   assert.match(output, /e\.example/, 'the oldest (to be pruned) is listed');
   assert.match(output, /d\.example/, 'the second oldest is listed');
   assert.equal(pruned, 1, 'one entry pruned');
-  assert.equal(writeLines.length, 4, 'one line removed from the file');
+  assert.equal(
+    writeText.split('\n').filter((l) => l !== '').length,
+    4,
+    'one line removed from the file',
+  );
   assert.ok(
-    !writeLines.some((l) => l.includes('e.example')),
+    !writeText.includes('e.example'),
     'the pruned oldest is gone from the written file',
   );
 });
@@ -239,11 +243,131 @@ test('runOps summary after a prune includes the prune delta', () => {
 
 test('runOps without a prune does not rewrite the file', () => {
   const parsed = parseCache(SAMPLE);
-  const { writeLines, pruned } = runOps(parsed, [{ kind: 'summary' }], {
+  const { writeText, pruned } = runOps(parsed, [{ kind: 'summary' }], {
     now: NOW,
   });
   assert.equal(pruned, 0, 'nothing pruned');
-  assert.equal(writeLines, null, 'no write when nothing changed');
+  assert.equal(writeText, null, 'writeText stays null when nothing changed');
+});
+
+// --- owned-format (link-cache.jsonc) support ---
+
+const A_BLOCK = `  // seed rationale
+  "https://a.example/": {
+    "status": 206,
+    "when": "2000-08-05T01:46:40Z",
+    "via": "manual",
+  },
+`;
+const B_BLOCK = `  "https://b.example/": {
+    "status": 200,
+    "when": "2001-09-09T01:46:40Z",
+    "via": "lychee",
+  },
+`;
+const C_BLOCK = `  "https://c.example/": {
+    "status": 200,
+    "when": "2001-08-30T01:46:40Z",
+    "via": "browser",
+  },
+`;
+const OWNED_SAMPLE = `{\n${A_BLOCK}${B_BLOCK}${C_BLOCK}}\n`;
+
+test('parseOwnedCache adapts owned entries to the common shape', () => {
+  const parsed = parseOwnedCache(OWNED_SAMPLE);
+  assert.equal(parsed.kind, 'owned', 'format detected');
+  assert.equal(parsed.entries.length, 3, 'all entries parsed');
+  assert.equal(parsed.entries[0].status, '206', 'status is stringified');
+  assert.equal(parsed.entries[0].via, 'manual', 'via is carried');
+});
+
+test('owned summary includes a via breakdown', () => {
+  const parsed = parseOwnedCache(OWNED_SAMPLE);
+  const { output } = runOps(parsed, [{ kind: 'summary' }], { now: NOW });
+  assert.match(output, /Via:/, 'via section present');
+  assert.match(output, /manual\s+1/, 'manual counted');
+  assert.match(output, /lychee\s+1/, 'lychee counted');
+});
+
+test('owned prune drops the oldest entry with its comment', () => {
+  const parsed = parseOwnedCache(OWNED_SAMPLE);
+  const { writeText, pruned } = runOps(
+    parsed,
+    [{ kind: 'prune', value: '1' }],
+    {
+      now: NOW,
+    },
+  );
+  assert.equal(pruned, 1, 'one entry pruned');
+  assert.ok(!writeText.includes('a.example'), 'oldest entry is gone');
+  assert.ok(!writeText.includes('seed rationale'), 'its comment goes with it');
+  assert.match(writeText, /c\.example/, 'surviving entries remain');
+});
+
+test('owned prune preserves surviving entries byte-identically', () => {
+  const parsed = parseOwnedCache(OWNED_SAMPLE);
+  const { writeText } = runOps(parsed, [{ kind: 'prune', value: '1' }], {
+    now: NOW,
+  });
+  assert.equal(
+    writeText,
+    `{\n${B_BLOCK}${C_BLOCK}}\n`,
+    'survivor blocks are byte-identical, pruned block is gone',
+  );
+});
+
+// --- --match scoping ---
+
+test('match scopes list and summary to matching URLs', () => {
+  const parsed = parseOwnedCache(OWNED_SAMPLE);
+  const { output } = runOps(
+    parsed,
+    [{ kind: 'list', value: '5' }, { kind: 'summary' }],
+    { now: NOW, match: /b\.example/ },
+  );
+  assert.match(output, /b\.example/, 'matching entry listed');
+  assert.ok(!output.includes('a.example'), 'listing is scoped to matches');
+  assert.match(output, /Entries: 1/, 'summary counts matches only');
+});
+
+test('match scopes prune but never drops out-of-scope entries on rewrite', () => {
+  const parsed = parseOwnedCache(OWNED_SAMPLE);
+  // a is the oldest overall, but only c matches: c is pruned, a and b survive.
+  const { writeText, pruned } = runOps(
+    parsed,
+    [{ kind: 'prune', value: '1' }],
+    { now: NOW, match: /c\.example/ },
+  );
+  assert.equal(pruned, 1, 'one matching entry pruned');
+  assert.equal(
+    writeText,
+    `{\n${A_BLOCK}${B_BLOCK}}\n`,
+    'out-of-scope entries survive the rewrite',
+  );
+});
+
+test('parseArgs compiles --match and rejects an invalid regex', () => {
+  assert.equal(
+    parseArgs(['-m', 'foo.*']).match.source,
+    'foo.*',
+    'regex compiled',
+  );
+  assert.throws(
+    () => parseArgs(['--match', '(']),
+    /--match needs a valid regex/,
+    'invalid regex is rejected',
+  );
+});
+
+test('match tests the unquoted URL on the legacy CSV path', () => {
+  // The raw CSV field is quoted for comma URLs; an anchored regex must still
+  // match the real URL.
+  const parsed = parseCache('"https://a.example/x,y",200,100\n');
+  const { output } = runOps(parsed, [{ kind: 'list', value: '5' }], {
+    now: NOW,
+    match: /^https:\/\/a\.example\//,
+  });
+  assert.match(output, /a\.example\/x,y/, 'anchored regex matches a comma URL');
 });
 
 // --- CLI entry point ---
@@ -253,19 +377,39 @@ test(
   { skip: process.platform === 'win32' ? 'POSIX symlink bins only' : false },
   () => {
     // A naive `file://${argv[1]}` guard misses the symlink and silently skips
-    // main(), so `npx refcache` would do nothing.
+    // main(), so `npx link-cache` would do nothing.
     const script = fileURLToPath(new URL('./index.mjs', import.meta.url));
-    const dir = mkdtempSync(join(tmpdir(), 'refcache-'));
-    const link = join(dir, 'refcache');
+    const dir = mkdtempSync(join(tmpdir(), 'link-cache-'));
+    const link = join(dir, 'link-cache');
     symlinkSync(script, link);
     try {
       const r = spawnSync(process.execPath, [link, '--help'], {
         encoding: 'utf8',
       });
       assert.equal(r.status, 0, 'help exits 0');
-      assert.match(r.stdout, /Usage: refcache/, 'main ran via the symlink');
+      assert.match(r.stdout, /Usage: link-cache/, 'main ran via the symlink');
+      assert.ok(
+        !r.stderr.includes('deprecated'),
+        'the canonical bin name keeps stderr clean',
+      );
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
   },
 );
+
+test('the refcache alias wrapper warns and delegates', () => {
+  // A dedicated wrapper file, not an argv[1] sniff: works under npm's Windows
+  // shims too, so this test runs on every platform.
+  const script = fileURLToPath(new URL('./refcache.mjs', import.meta.url));
+  const r = spawnSync(process.execPath, [script, '--help'], {
+    encoding: 'utf8',
+  });
+  assert.equal(r.status, 0, 'the alias still works');
+  assert.match(r.stdout, /Usage: link-cache/, 'main ran via the alias');
+  assert.match(
+    r.stderr,
+    /refcache bin is deprecated/,
+    'the alias names its replacement',
+  );
+});
