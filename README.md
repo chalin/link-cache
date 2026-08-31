@@ -4,14 +4,74 @@ Zero-dependency helper CLIs for **cached** link checking with [Lychee][], for
 any static site that builds to a `public/` directory (Docsy, Hugo, and others).
 Two tools:
 
-- **`lychee-norm-cache`** — run lychee over your built `public/` output, then
-  normalize `.lycheecache` so reruns and commits stay byte stable.
-- **`refcache`** — inspect and prune that `.lycheecache` (the "refcache"): list
-  the oldest entries, prune a count or percentage, or print a summary.
+- **`lychee-norm-cache`** — run lychee over your built `public/` output, keeping
+  the committed `link-cache.jsonc` cache and lychee's derived `.lycheecache` in
+  sync.
+- **`refcache`** — inspect and prune the cache: list the oldest entries, prune a
+  count or percentage, or print a summary (status, provenance, ages).
 
-With a committed `lychee.toml` and `.lycheecache`, these give a site a
+With a committed `lychee.toml` and `link-cache.jsonc`, these give a site a
 self-contained, cached link-checking setup: fast reruns, and diffs that only
 change when links actually change.
+
+## The owned cache: `link-cache.jsonc`
+
+The committed source of truth is `link-cache.jsonc` — a line-disciplined JSONC
+file, one URL entry per line, sorted, with `//` comments allowed on their own
+lines (each comment attaches to the entry below it and survives rewrites):
+
+```jsonc
+{
+  // Seeded pending my-org/repo#123; the target lands with that merge.
+  "https://example.com/future-page/": {
+    "status": 200,
+    "ts": 1788033998,
+    "via": "manual",
+    "expires": "2026-09-30",
+  },
+  "https://example.com/": { "status": 200, "ts": 1788033998, "via": "lychee" },
+}
+```
+
+Each entry records:
+
+- **`status`** — generalized: positive values are HTTP statuses; `0` is
+  unchecked; negative values are tool-specific errors (`-10` timeout, `-20`
+  network/DNS, `-30` certificate, `-40` generic client error).
+- **`ts`** — unix seconds of the last verification.
+- **`via`** — the resolver that set the status: `lychee`, `manual`
+  (hand-seeded), or a named specialized resolver (e.g. a browser-grade probe).
+- **`expires`** (optional, `manual` entries) — `YYYY-MM-DD`. Until then the
+  entry is trusted (never re-checked, overriding lychee's `max_cache_age`);
+  after that, it's re-checked live and replaced by the verified result.
+
+Lychee's own CSV cache, `.lycheecache`, is **derived**: `lychee-norm-cache`
+projects the owned cache into it before each run and folds lychee's results back
+afterwards. Gitignore `.lycheecache`; commit `link-cache.jsonc`. Lychee re-check
+results overwrite an entry only when its status changes; an entry lychee drops
+(it never persists errors) is recorded as a negative tool-error status.
+
+Without a `link-cache.jsonc`, `lychee-norm-cache` falls back to the legacy mode:
+normalize the committed `.lycheecache` in place. To migrate:
+
+```sh
+npm run check:links -- --migrate   # .lycheecache -> link-cache.jsonc
+```
+
+then commit `link-cache.jsonc` and gitignore `.lycheecache`. If the cache has a
+`merge=union` gitattribute, move it to `link-cache.jsonc` (duplicate lines from
+union merges are benign: the next run dedupes, newest entry wins).
+
+## Exit codes (`lychee-norm-cache`)
+
+- `0` — success.
+- `1` — dead links: the check ran and found failures.
+- `2` — preflight or sanity failure: lychee or `public/` missing, lychee config
+  error, or **zero links checked** (an empty or fully-excluded `public/` is a
+  false-clean, not a pass).
+
+Warn-style wrappers can soften exit 1 (advisory link rot) while still failing
+hard on exit 2 (the check didn't actually run).
 
 ## Requirements
 

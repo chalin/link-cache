@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url';
 import {
   parseArgs,
   parseCache,
+  parseOwnedCache,
   resolvePruneCount,
   selectOldest,
   computeStats,
@@ -82,10 +83,10 @@ test('parseArgs validates the prune amount', () => {
   ]);
 });
 
-test('parseArgs defaults the path and yields no ops when none given', () => {
+test('parseArgs leaves the path null (resolved at run time) and yields no ops', () => {
   const { ops, path } = parseArgs([]);
   assert.deepEqual(ops, [], 'no flags means no ops');
-  assert.equal(path, '.lycheecache', 'default refcache path');
+  assert.equal(path, null, 'path resolution is deferred to main');
 });
 
 test('parseArgs captures a positional refcache path', () => {
@@ -187,7 +188,7 @@ test('formatStats reports the prune delta when entries were pruned', () => {
 
 test('runOps with list before prune lists the pre-prune oldest', () => {
   const parsed = parseCache(SAMPLE);
-  const { output, writeLines, pruned } = runOps(
+  const { output, writeText, pruned } = runOps(
     parsed,
     [
       { kind: 'list', value: '2' },
@@ -198,9 +199,13 @@ test('runOps with list before prune lists the pre-prune oldest', () => {
   assert.match(output, /e\.example/, 'the oldest (to be pruned) is listed');
   assert.match(output, /d\.example/, 'the second oldest is listed');
   assert.equal(pruned, 1, 'one entry pruned');
-  assert.equal(writeLines.length, 4, 'one line removed from the file');
+  assert.equal(
+    writeText.split('\n').filter((l) => l !== '').length,
+    4,
+    'one line removed from the file',
+  );
   assert.ok(
-    !writeLines.some((l) => l.includes('e.example')),
+    !writeText.includes('e.example'),
     'the pruned oldest is gone from the written file',
   );
 });
@@ -239,11 +244,65 @@ test('runOps summary after a prune includes the prune delta', () => {
 
 test('runOps without a prune does not rewrite the file', () => {
   const parsed = parseCache(SAMPLE);
-  const { writeLines, pruned } = runOps(parsed, [{ kind: 'summary' }], {
+  const { writeText, pruned } = runOps(parsed, [{ kind: 'summary' }], {
     now: NOW,
   });
   assert.equal(pruned, 0, 'nothing pruned');
-  assert.equal(writeLines, null, 'no write when nothing changed');
+  assert.equal(writeText, null, 'no write when nothing changed');
+});
+
+// --- owned-format (link-cache.jsonc) support ---
+
+const OWNED_SAMPLE = `{
+  // seed rationale
+  "https://a.example/": { "status": 206, "ts": ${NOW - 400 * DAY}, "via": "manual" },
+  "https://b.example/": { "status": 200, "ts": ${NOW}, "via": "lychee" },
+  "https://c.example/": { "status": 200, "ts": ${NOW - 10 * DAY}, "via": "browser" },
+}
+`;
+
+test('parseOwnedCache adapts owned entries to the common shape', () => {
+  const parsed = parseOwnedCache(OWNED_SAMPLE);
+  assert.equal(parsed.kind, 'owned', 'format detected');
+  assert.equal(parsed.entries.length, 3, 'all entries parsed');
+  assert.equal(parsed.entries[0].status, '206', 'status is stringified');
+  assert.equal(parsed.entries[0].via, 'manual', 'via is carried');
+});
+
+test('owned summary includes a via breakdown', () => {
+  const parsed = parseOwnedCache(OWNED_SAMPLE);
+  const { output } = runOps(parsed, [{ kind: 'summary' }], { now: NOW });
+  assert.match(output, /Via:/, 'via section present');
+  assert.match(output, /manual\s+1/, 'manual counted');
+  assert.match(output, /lychee\s+1/, 'lychee counted');
+});
+
+test('owned prune drops the oldest entry with its comment', () => {
+  const parsed = parseOwnedCache(OWNED_SAMPLE);
+  const { writeText, pruned } = runOps(
+    parsed,
+    [{ kind: 'prune', value: '1' }],
+    {
+      now: NOW,
+    },
+  );
+  assert.equal(pruned, 1, 'one entry pruned');
+  assert.ok(!writeText.includes('a.example'), 'oldest entry is gone');
+  assert.ok(!writeText.includes('seed rationale'), 'its comment goes with it');
+  assert.match(writeText, /c\.example/, 'surviving entries remain');
+});
+
+test('owned prune preserves surviving entries byte-identically', () => {
+  const survivorLines = OWNED_SAMPLE.split('\n').filter(
+    (l) => l.includes('b.example') || l.includes('c.example'),
+  );
+  const parsed = parseOwnedCache(OWNED_SAMPLE);
+  const { writeText } = runOps(parsed, [{ kind: 'prune', value: '1' }], {
+    now: NOW,
+  });
+  for (const line of survivorLines) {
+    assert.ok(writeText.includes(line), `survivor line intact: ${line.trim()}`);
+  }
 });
 
 // --- CLI entry point ---

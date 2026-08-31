@@ -5,12 +5,28 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { publicDirOf, resolveToken, sortCacheText } from './index.mjs';
+import {
+  EXIT_DEAD_LINKS,
+  EXIT_OK,
+  EXIT_PREFLIGHT,
+  mapLycheeExit,
+  parseTotalChecked,
+  publicDirOf,
+  resolveToken,
+  sortCacheText,
+} from './index.mjs';
 
 // --- resolveToken ---
 
@@ -138,6 +154,108 @@ test(
     }
   },
 );
+
+// --- exit-code mapping & zero-links sanity ---
+
+test('mapLycheeExit maps broken links (2) to dead-links exit 1', () => {
+  assert.equal(mapLycheeExit(2), EXIT_DEAD_LINKS, 'dead links exit 1');
+});
+
+test('mapLycheeExit passes success through', () => {
+  assert.equal(mapLycheeExit(0), EXIT_OK, 'success exits 0');
+});
+
+test('mapLycheeExit maps config/runtime errors to preflight exit 2', () => {
+  assert.equal(mapLycheeExit(3), EXIT_PREFLIGHT, 'config error is preflight');
+  assert.equal(mapLycheeExit(1), EXIT_PREFLIGHT, 'runtime error is preflight');
+});
+
+test('parseTotalChecked reads the human summary line', () => {
+  assert.equal(
+    parseTotalChecked('🔍 1234 Total (in 3s) 🔗 900 Unique ✅ 1234 OK'),
+    1234,
+    'summary total parsed',
+  );
+});
+
+test('parseTotalChecked reads --format json output', () => {
+  assert.equal(
+    parseTotalChecked('{"total": 42, "successful": 42}'),
+    42,
+    'json total parsed',
+  );
+});
+
+test('parseTotalChecked yields null for unrecognized output', () => {
+  assert.equal(parseTotalChecked('nothing here'), null, 'unknown format');
+});
+
+test('missing public/ is a preflight failure: exit 2', () => {
+  const script = fileURLToPath(new URL('./index.mjs', import.meta.url));
+  const site = mkdtempSync(join(tmpdir(), 'lnc-'));
+  try {
+    const r = spawnSync(process.execPath, [script], {
+      cwd: site,
+      encoding: 'utf8',
+    });
+    assert.equal(r.status, 2, 'preflight failures exit 2');
+    assert.match(r.stderr, /public/, 'the missing dir is named');
+  } finally {
+    rmSync(site, { recursive: true, force: true });
+  }
+});
+
+test('missing lychee binary is a preflight failure: exit 2', () => {
+  const script = fileURLToPath(new URL('./index.mjs', import.meta.url));
+  const site = mkdtempSync(join(tmpdir(), 'lnc-'));
+  try {
+    mkdirSync(join(site, 'public'));
+    const r = spawnSync(process.execPath, [script], {
+      cwd: site,
+      encoding: 'utf8',
+      env: { ...process.env, PATH: '' },
+    });
+    assert.equal(r.status, 2, 'preflight failures exit 2');
+    assert.match(r.stderr, /lychee not found/, 'the missing tool is named');
+  } finally {
+    rmSync(site, { recursive: true, force: true });
+  }
+});
+
+// --- --migrate ---
+
+test('--migrate converts .lycheecache to link-cache.jsonc', () => {
+  const script = fileURLToPath(new URL('./index.mjs', import.meta.url));
+  const site = mkdtempSync(join(tmpdir(), 'lnc-'));
+  try {
+    writeFileSync(join(site, '.lycheecache'), 'https://a.example/,200,100\n');
+    const r = spawnSync(process.execPath, [script, '--migrate'], {
+      cwd: site,
+      encoding: 'utf8',
+    });
+    assert.equal(r.status, 0, 'migration succeeds');
+    const owned = readFileSync(join(site, 'link-cache.jsonc'), 'utf8');
+    assert.match(owned, /"via": "lychee"/, 'entries credited to lychee');
+  } finally {
+    rmSync(site, { recursive: true, force: true });
+  }
+});
+
+test('--migrate refuses to overwrite an existing link-cache.jsonc', () => {
+  const script = fileURLToPath(new URL('./index.mjs', import.meta.url));
+  const site = mkdtempSync(join(tmpdir(), 'lnc-'));
+  try {
+    writeFileSync(join(site, '.lycheecache'), 'https://a.example/,200,100\n');
+    writeFileSync(join(site, 'link-cache.jsonc'), '{\n}\n');
+    const r = spawnSync(process.execPath, [script, '--migrate'], {
+      cwd: site,
+      encoding: 'utf8',
+    });
+    assert.equal(r.status, 2, 'refusal is a preflight failure');
+  } finally {
+    rmSync(site, { recursive: true, force: true });
+  }
+});
 
 // --- CLI: --help short-circuits before the lychee check ---
 

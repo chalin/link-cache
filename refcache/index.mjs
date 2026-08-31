@@ -1,17 +1,23 @@
 #!/usr/bin/env node
-// The `refcache` bin: inspect and prune a Lychee refcache. Read-only unless
+// The `refcache` bin: inspect and prune a link cache — the owned JSONC cache
+// (link-cache.jsonc) or a legacy Lychee CSV (.lycheecache). Read-only unless
 // `--prune` is given, and never hits the network. Run with `--help` for usage.
 //
-// Refcache line format: URL,STATUS,UNIX_TIMESTAMP — the URL is CSV-quoted when
-// it contains a comma, so STATUS and TIMESTAMP are read from the final two
-// fields.
+// CSV line format: URL,STATUS,UNIX_TIMESTAMP — the URL is CSV-quoted when it
+// contains a comma, so STATUS and TIMESTAMP are read from the final two fields.
 
-import { readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+
+import {
+  CSV_FILE,
+  OWNED_FILE,
+  parseOwned,
+  serializeOwned,
+} from '../lib/cache.mjs';
 
 const DAY = 86400;
 const BUCKET_COUNT = 5;
-const DEFAULT_PATH = '.lycheecache';
 
 // --- parsing ---------------------------------------------------------------
 
@@ -28,9 +34,9 @@ function parseLine(raw) {
   return { url, status, ts };
 }
 
-// Parse the whole file, keeping the original lines (so a prune can rewrite the
-// file with a minimal, still-sorted diff) and tagging each entry with its line
-// index.
+// Parse a whole CSV cache, keeping the original lines (so a prune can rewrite
+// the file with a minimal, still-sorted diff) and tagging each entry with its
+// line index.
 export function parseCache(text) {
   const lines = text.split('\n');
   const entries = [];
@@ -44,7 +50,21 @@ export function parseCache(text) {
     }
     entries.push({ ...parsed, index });
   });
-  return { lines, entries, malformed };
+  return { kind: 'csv', lines, entries, malformed };
+}
+
+// Adapt the owned JSONC cache to the same entry shape (string status, index).
+export function parseOwnedCache(text) {
+  const owned = parseOwned(text);
+  const entries = owned.entries.map((e, index) => ({
+    url: e.url,
+    status: String(e.status),
+    ts: e.ts,
+    via: e.via,
+    index,
+    src: e,
+  }));
+  return { kind: 'owned', owned, entries, malformed: 0 };
 }
 
 // --- selection / pruning ---------------------------------------------------
@@ -88,20 +108,24 @@ export function computeStats(
   { now = Date.now() / 1000, malformed = 0, pruned = 0 } = {},
 ) {
   const statusCounts = new Map();
+  const viaCounts = new Map();
   const ages = [];
   let oldestTs = null;
   let newestTs = null;
 
   for (const entry of entries) {
     statusCounts.set(entry.status, (statusCounts.get(entry.status) ?? 0) + 1);
+    if (entry.via !== undefined) {
+      viaCounts.set(entry.via, (viaCounts.get(entry.via) ?? 0) + 1);
+    }
     if (oldestTs === null || entry.ts < oldestTs) oldestTs = entry.ts;
     if (newestTs === null || entry.ts > newestTs) newestTs = entry.ts;
     ages.push(Math.floor((now - entry.ts) / DAY));
   }
 
-  const byStatus = [...statusCounts.entries()].sort(
-    (a, b) => b[1] - a[1] || a[0].localeCompare(b[0]),
-  );
+  const desc = (a, b) => b[1] - a[1] || a[0].localeCompare(b[0]);
+  const byStatus = [...statusCounts.entries()].sort(desc);
+  const byVia = [...viaCounts.entries()].sort(desc);
 
   const at = (ts) =>
     ts === null ? null : { ts, ageDays: Math.floor((now - ts) / DAY) };
@@ -112,6 +136,7 @@ export function computeStats(
     malformed,
     pruned,
     byStatus,
+    byVia,
     oldest,
     newest: at(newestTs),
     ageBuckets: ageHistogram(ages, oldest ? oldest.ageDays : 0),
@@ -145,14 +170,15 @@ export function formatList(entries, n, { now = Date.now() / 1000 } = {}) {
   const head = `${chosen.length} oldest ${chosen.length === 1 ? 'entry' : 'entries'}:`;
   const rows = chosen.map((e) => {
     const ageDays = Math.floor((now - e.ts) / DAY);
-    return `  ${localStamp(e.ts)}  ${String(ageDays).padStart(4)}d  ${e.status}  ${displayUrl(e.url)}`;
+    const via = e.via !== undefined ? `  ${e.via}` : '';
+    return `  ${localStamp(e.ts)}  ${String(ageDays).padStart(4)}d  ${e.status}${via}  ${displayUrl(e.url)}`;
   });
   return [head, ...rows].join('\n');
 }
 
 export function formatStats(stats, { now = Date.now() / 1000, path } = {}) {
   const lines = [];
-  lines.push(`Lychee refcache${path ? `: ${path}` : ''}`);
+  lines.push(`Link cache${path ? `: ${path}` : ''}`);
   lines.push(`  Entries: ${stats.count}`);
   if (stats.pruned) {
     const before = stats.count + stats.pruned;
@@ -174,6 +200,14 @@ export function formatStats(stats, { now = Date.now() / 1000, path } = {}) {
     lines.push(`    ${status.padEnd(5)} ${n}`);
   }
 
+  if (stats.byVia?.length) {
+    lines.push('  Via:');
+    const w = Math.max(...stats.byVia.map(([via]) => via.length));
+    for (const [via, n] of stats.byVia) {
+      lines.push(`    ${via.padEnd(w)}  ${n}`);
+    }
+  }
+
   if (stats.ageBuckets.length) {
     lines.push('  Age:');
     const w = Math.max(...stats.ageBuckets.map((b) => b.label.length));
@@ -188,7 +222,7 @@ export function formatStats(stats, { now = Date.now() / 1000, path } = {}) {
 // --- ordered execution -----------------------------------------------------
 
 // Run the parsed ops in order over the evolving cache. Pure: returns the text to
-// print and the lines to write (null when nothing was pruned); no I/O.
+// print and the text to write (null when nothing was pruned); no I/O.
 export function runOps(parsed, ops, { now = Date.now() / 1000, path } = {}) {
   const removed = new Set();
   let pruned = 0;
@@ -216,9 +250,20 @@ export function runOps(parsed, ops, { now = Date.now() / 1000, path } = {}) {
     }
   }
 
-  const writeLines =
-    pruned > 0 ? parsed.lines.filter((_, i) => !removed.has(i)) : null;
-  return { output: out.join('\n\n'), writeLines, pruned };
+  let writeText = null;
+  if (pruned > 0) {
+    if (parsed.kind === 'owned') {
+      // Comments of surviving entries travel with them; pruned entries take
+      // their comment lines along.
+      writeText = serializeOwned({
+        entries: current().map((e) => e.src),
+        trailing: parsed.owned.trailing,
+      });
+    } else {
+      writeText = parsed.lines.filter((_, i) => !removed.has(i)).join('\n');
+    }
+  }
+  return { output: out.join('\n\n'), writeText, pruned };
 }
 
 // --- CLI -------------------------------------------------------------------
@@ -268,18 +313,19 @@ export function parseArgs(argv) {
     path = a;
   }
 
-  return { ops, path: path ?? DEFAULT_PATH, help };
+  return { ops, path, help };
 }
 
-const USAGE = `Usage: refcache [REFCACHE_FILE] [options]
+const USAGE = `Usage: refcache [CACHE_FILE] [options]
 
-Inspect and prune a Lychee refcache (default: ${DEFAULT_PATH}). Options run in
-the order given, over the evolving cache, so \`-l 5 -p 5\` lists the 5 oldest
-about to be pruned, while \`-p 5 -l 5\` lists the next 5 after pruning.
+Inspect and prune a link cache: the owned ${OWNED_FILE} (default when present)
+or a legacy Lychee CSV like ${CSV_FILE}. Options run in the order given, over
+the evolving cache, so \`-l 5 -p 5\` lists the 5 oldest about to be pruned,
+while \`-p 5 -l 5\` lists the next 5 after pruning.
 
   -l, --list NUM        list the NUM oldest entries
   -p, --prune NUM[%]    drop the NUM (or NUM%) oldest entries, then rewrite
-  -s, --summary         print a summary (counts, ages, status, histogram)
+  -s, --summary         print a summary (counts, ages, status, via, histogram)
   -h, --help            show this help
 
 With no options, prints the summary. A flag may not be repeated.`;
@@ -298,23 +344,31 @@ function main(argv) {
     return;
   }
 
+  const path = args.path ?? (existsSync(OWNED_FILE) ? OWNED_FILE : CSV_FILE);
+
   let text;
   try {
-    text = readFileSync(args.path, 'utf8');
+    text = readFileSync(path, 'utf8');
   } catch {
-    console.error(`[error] cannot read refcache file: ${args.path}`);
+    console.error(`[error] cannot read cache file: ${path}`);
+    process.exit(1);
+  }
+
+  const isOwned = path.endsWith('.jsonc') || text.trimStart().startsWith('{');
+  let parsed;
+  try {
+    parsed = isOwned ? parseOwnedCache(text) : parseCache(text);
+  } catch (err) {
+    console.error(`[error] ${err.message}`);
     process.exit(1);
   }
 
   const now = Date.now() / 1000;
   const ops = args.ops.length ? args.ops : [{ kind: 'summary' }];
-  const { output, writeLines } = runOps(parseCache(text), ops, {
-    now,
-    path: args.path,
-  });
+  const { output, writeText } = runOps(parsed, ops, { now, path });
 
   if (output) console.log(output);
-  if (writeLines) writeFileSync(args.path, writeLines.join('\n'));
+  if (writeText !== null) writeFileSync(path, writeText);
 }
 
 // Real-path compare, not `file://${argv[1]}`: npm links bins as symlinks, so

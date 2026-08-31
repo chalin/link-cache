@@ -1,7 +1,7 @@
 {
   "name": "link-cache",
-  "version": "0.3.0",
-  "description": "Zero-dependency helper CLIs for cached Lychee link-checking: lychee-norm-cache (run + normalize .lycheecache) and refcache (inspect/prune the cache).",
+  "version": "0.4.0",
+  "description": "Zero-dependency helper CLIs for cached Lychee link-checking around an owned JSONC cache (link-cache.jsonc) with provenance: lychee-norm-cache (run + sync caches) and refcache (inspect/prune).",
   "keywords": [
     "lychee",
     "link-checker",
@@ -21,6 +21,7 @@
   },
   "files": [
     "check/index.mjs",
+    "lib/cache.mjs",
     "refcache/index.mjs"
   ],
   "scripts": {
