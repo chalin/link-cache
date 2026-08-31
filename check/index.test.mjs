@@ -23,6 +23,7 @@ import {
   EXIT_OK,
   EXIT_PREFLIGHT,
   mapLycheeExit,
+  parseFailedUrls,
   parseSummary,
   publicDirOf,
   resolveToken,
@@ -214,8 +215,15 @@ test('mapLycheeExit treats lychee exit 2 without a summary as preflight', () => 
   );
 });
 
-test('mapLycheeExit passes success through', () => {
-  assert.equal(mapLycheeExit(0, null), EXIT_OK, 'success exits 0');
+test('mapLycheeExit passes a summarized success through', () => {
+  const summary = { total: 1, ok: 1, errors: 0 };
+  assert.equal(mapLycheeExit(0, summary), EXIT_OK, 'success exits 0');
+});
+
+test('mapLycheeExit treats a summary-less success as preflight', () => {
+  // Non-check modes and diverted output exit 0 with no summary: without proof
+  // that a check completed, success is not reportable.
+  assert.equal(mapLycheeExit(0, null), EXIT_PREFLIGHT, 'no summary, no pass');
 });
 
 test('mapLycheeExit maps config/runtime errors to preflight exit 2', () => {
@@ -250,6 +258,44 @@ test('parseSummary reads --format json output', () => {
 
 test('parseSummary yields null for unrecognized output', () => {
   assert.equal(parseSummary('nothing here'), null, 'unknown format');
+});
+
+test('parseFailedUrls reads human [ERROR] lines', () => {
+  const out = [
+    '[f.md]:',
+    '[ERROR] https://dead.example/ (at 1:1) | Failed: 404',
+    '     [ERROR] file:///site/missing.html | File not found',
+    '🔍 2 Total (in 1s) 🔗 2 Unique ✅ 0 OK 🚫 2 Errors',
+  ].join('\n');
+  assert.deepEqual(
+    [...parseFailedUrls(out)].sort(),
+    ['file:///site/missing.html', 'https://dead.example/'],
+    'both failing URLs extracted',
+  );
+});
+
+test('parseFailedUrls reads --format json fail_map', () => {
+  const out = JSON.stringify({
+    total: 2,
+    successful: 1,
+    errors: 1,
+    fail_map: {
+      'public/index.html': [{ url: 'https://dead.example/', status: 'Failed' }],
+    },
+  });
+  assert.deepEqual(
+    [...parseFailedUrls(out)],
+    ['https://dead.example/'],
+    'fail_map URL extracted',
+  );
+});
+
+test('parseFailedUrls yields an empty set for a clean run', () => {
+  assert.equal(
+    parseFailedUrls('🔍 1 Total (in 1s) 🔗 1 Unique ✅ 1 OK 🚫 0 Errors').size,
+    0,
+    'a clean summary reports nothing failing',
+  );
 });
 
 // --- end-to-end against the stub lychee ---
@@ -294,6 +340,17 @@ const OWNED_WITH_EXPIRED = `{
     "when": "2020-01-01T00:00:00Z",
     "via": "manual",
     "expires": "2020-06-30",
+  },
+}
+`;
+
+const OWNED_WITH_SEED = `{
+  // range seed
+  "https://seed.example/x": {
+    "status": 206,
+    "when": "2026-08-01T00:00:00Z",
+    "via": "manual",
+    "expires": "2027-01-01",
   },
 }
 `;
@@ -422,6 +479,72 @@ test(
     try {
       const r = runWrapper(site);
       assert.equal(r.status, 1, 'a completed run with failures exits 1');
+    } finally {
+      rmSync(site, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
+  'lychee exit 0 without a summary is preflight: no false-clean',
+  { skip: WIN_SKIP },
+  () => {
+    // Non-check modes (--dump-inputs) and diverted output (--output FILE,
+    // --format junit) exit 0 without a stdout summary; without proof that a
+    // check completed, the wrapper must not report success.
+    const site = makeSite({ stdout: 'inputs listed', exit: 0 });
+    try {
+      const r = runWrapper(site);
+      assert.equal(r.status, 2, 'summary-less success is preflight');
+    } finally {
+      rmSync(site, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
+  'a clean run keeps entries the CSV no longer lists',
+  { skip: WIN_SKIP },
+  () => {
+    // cache_exclude_status (and max_cache_age) legitimately remove entries from
+    // a healthy run's CSV; absence must not become a failure verdict.
+    const site = makeSite({
+      stdout: '🔍 1 Total (in 1s) 🔗 1 Unique ✅ 1 OK 🚫 0 Errors',
+      exit: 0,
+      csvAfterRun: '', // lychee wrote back an empty cache
+    });
+    writeFileSync(join(site, 'link-cache.jsonc'), OWNED_WITH_SEED);
+    try {
+      const r = runWrapper(site);
+      assert.equal(r.status, 0, 'run succeeds');
+      const owned = readFileSync(join(site, 'link-cache.jsonc'), 'utf8');
+      assert.match(owned, /"status": 206/, 'the absent entry keeps its status');
+      assert.match(owned, /"via": "manual"/, 'provenance survives');
+    } finally {
+      rmSync(site, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
+  'a reported failure becomes a tool-error entry',
+  { skip: WIN_SKIP },
+  () => {
+    const site = makeSite({
+      stdout: [
+        '[ERROR] https://seed.example/x (at 1:1) | Failed: 404',
+        '🔍 1 Total (in 1s) 🔗 1 Unique ✅ 0 OK 🚫 1 Error',
+      ].join('\n'),
+      exit: 2,
+      csvAfterRun: '',
+    });
+    writeFileSync(join(site, 'link-cache.jsonc'), OWNED_WITH_SEED);
+    try {
+      const r = runWrapper(site);
+      assert.equal(r.status, 1, 'a completed run with failures exits 1');
+      const owned = readFileSync(join(site, 'link-cache.jsonc'), 'utf8');
+      assert.match(owned, /"status": -40/, 'the failure is recorded');
+      assert.match(owned, /\/\/ range seed/, 'the rationale comment is kept');
     } finally {
       rmSync(site, { recursive: true, force: true });
     }

@@ -23,6 +23,7 @@
   "files": [
     "check/index.mjs",
     "lib/cache.mjs",
+    "lib/write.mjs",
     "link-cache/index.mjs",
     "link-cache/refcache.mjs"
   ],

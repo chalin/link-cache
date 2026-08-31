@@ -7,7 +7,7 @@
 // CSV line format: URL,STATUS,UNIX_TIMESTAMP — the URL is CSV-quoted when it
 // contains a comma, so STATUS and TIMESTAMP are read from the final two fields.
 
-import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import {
@@ -16,6 +16,7 @@ import {
   parseOwned,
   serializeOwned,
 } from '../lib/cache.mjs';
+import { writeFileAtomic } from '../lib/write.mjs';
 
 const DAY = 86400;
 const BUCKET_COUNT = 5;
@@ -398,7 +399,7 @@ export function main(argv) {
   });
 
   if (output) console.log(output);
-  if (writeText !== null) writeFileSync(path, writeText);
+  if (writeText !== null) writeFileAtomic(path, writeText);
 }
 
 // Real-path compare, not `file://${argv[1]}`: npm links bins as symlinks, so

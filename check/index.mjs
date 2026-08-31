@@ -11,13 +11,7 @@
 // or public/ missing, zero links checked, lychee config error).
 
 import { spawnSync } from 'node:child_process';
-import {
-  existsSync,
-  readFileSync,
-  realpathSync,
-  statSync,
-  writeFileSync,
-} from 'node:fs';
+import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -32,6 +26,7 @@ import {
   serializeCsv,
   serializeOwned,
 } from '../lib/cache.mjs';
+import { writeFileAtomic } from '../lib/write.mjs';
 
 const INSTALL_HINT = 'https://github.com/lycheeverse/lychee#installation';
 
@@ -51,7 +46,12 @@ isn't set; extra arguments pass through to lychee.
   -h, --help   show this help
 
 Exit codes: 0 success; 1 dead links; 2 preflight/sanity failure (missing
-lychee or public/, zero links checked).
+lychee or public/, lychee config or usage errors, zero links verified).
+
+Lychee's summary must reach stdout in its default or JSON format — it is the
+wrapper's proof that a check completed — so flags that divert or reshape
+stdout (--output, --format junit, --dump-inputs, ...) are unsupported here;
+run lychee directly for those.
 
 Requires the lychee binary on your PATH and a lychee.toml at the site root.
 Run \`lychee --help\` for all link-checking options.`;
@@ -108,13 +108,43 @@ export function parseSummary(stdout) {
     : null;
 }
 
-// Map lychee's exit code to ours (0 ok, 1 dead links, 2 preflight). Lychee
-// exits 2 both for broken links and for argument errors; only a parsed
-// summary (the check completed) makes it a dead-links result.
+// Map lychee's exit code to ours (0 ok, 1 dead links, 2 preflight). A parsed
+// summary is required in every case: lychee exits 2 both for broken links and
+// for argument errors, and exits 0 from non-check modes (--dump-inputs) and
+// diverted-output runs (--output FILE, --format junit/detailed) — without the
+// summary there is no proof a check completed.
 export function mapLycheeExit(code, summary) {
+  if (!summary) return EXIT_PREFLIGHT;
   if (code === 0) return EXIT_OK;
-  if (code === 2 && summary) return EXIT_DEAD_LINKS;
+  if (code === 2) return EXIT_DEAD_LINKS;
   return EXIT_PREFLIGHT;
+}
+
+// URLs the run itself reported as failing — the human "[ERROR] URL …" lines,
+// or --format json's fail_map. Positive per-URL evidence for the merge-back's
+// failure recording; CSV absence alone proves nothing (cache_exclude_status,
+// max_cache_age, and site changes all remove entries from healthy runs).
+export function parseFailedUrls(stdout) {
+  const failed = new Set();
+  const trimmed = stdout.trim();
+  if (trimmed.startsWith('{')) {
+    try {
+      const failMap = JSON.parse(trimmed).fail_map ?? {};
+      for (const failures of Object.values(failMap)) {
+        for (const f of failures) {
+          const url = typeof f.url === 'string' ? f.url : f.url?.url;
+          if (url) failed.add(url);
+        }
+      }
+      return failed;
+    } catch {
+      // fall through to the line scan
+    }
+  }
+  for (const m of stdout.matchAll(/^\s*\[ERROR\]\s+(\S+)/gm)) {
+    failed.add(m[1]);
+  }
+  return failed;
 }
 
 // --- lychee invocation -----------------------------------------------------
@@ -147,7 +177,7 @@ function migrate(cwd) {
       `${CSV_FILE} has ${malformed} malformed line(s); fix or remove them, then rerun.`,
     );
   }
-  writeFileSync(ownedPath, text);
+  writeFileAtomic(ownedPath, text);
   console.log(
     `Migrated ${count} entries to ${OWNED_FILE}. Commit it and gitignore ${CSV_FILE}.`,
   );
@@ -191,7 +221,7 @@ function main(argv) {
 
   // Derive the CSV lychee will read from the owned cache.
   if (owned) {
-    writeFileSync(
+    writeFileAtomic(
       cachePath,
       serializeCsv(projectToCsv(owned.entries, { now })),
     );
@@ -247,13 +277,14 @@ function main(argv) {
     const csvEntries = existsSync(cachePath)
       ? parseCsv(readFileSync(cachePath, 'utf8')).entries
       : [];
-    writeFileSync(
+    const failedUrls = parseFailedUrls(run.stdout ?? '');
+    writeFileAtomic(
       ownedPath,
-      serializeOwned(mergeBack(owned, csvEntries, { now })),
+      serializeOwned(mergeBack(owned, csvEntries, { now, failedUrls })),
     );
-    writeFileSync(cachePath, sortCacheText(readFileSync(cachePath, 'utf8')));
+    writeFileAtomic(cachePath, sortCacheText(readFileSync(cachePath, 'utf8')));
   } else if (existsSync(cachePath)) {
-    writeFileSync(cachePath, sortCacheText(readFileSync(cachePath, 'utf8')));
+    writeFileAtomic(cachePath, sortCacheText(readFileSync(cachePath, 'utf8')));
   }
 
   return status;

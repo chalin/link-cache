@@ -65,8 +65,10 @@ afterwards. Gitignore `.lycheecache`; commit `link-cache.jsonc`. A re-check that
 changes an entry's status replaces the entry (provenance moves to `lychee`); a
 re-confirmation leaves provenance-bearing entries (`manual`, named resolvers)
 untouched, while `lychee`-owned entries refresh their `when` to record recency.
-An entry lychee drops (it never persists errors) is recorded as a negative
-tool-error status.
+A URL the run itself reports as failing is recorded as a negative tool-error
+status; an entry that merely goes missing from lychee's CSV is left untouched
+(cache-status excludes, cache aging, and site changes all remove entries from
+healthy runs).
 
 Without a `link-cache.jsonc`, `lychee-norm-cache` falls back to the legacy mode:
 normalize the committed `.lycheecache` in place. To migrate:
