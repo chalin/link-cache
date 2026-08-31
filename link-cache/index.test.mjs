@@ -248,7 +248,7 @@ test('runOps without a prune does not rewrite the file', () => {
     now: NOW,
   });
   assert.equal(pruned, 0, 'nothing pruned');
-  assert.equal(writeText, null, 'no write when nothing changed');
+  assert.equal(writeText, null, 'writeText stays null when nothing changed');
 });
 
 // --- owned-format (link-cache.jsonc) support ---
@@ -327,7 +327,7 @@ test('match scopes list and summary to matching URLs', () => {
     { now: NOW, match: /b\.example/ },
   );
   assert.match(output, /b\.example/, 'matching entry listed');
-  assert.ok(!output.includes('a.example'), 'non-matching entry not listed');
+  assert.ok(!output.includes('a.example'), 'listing is scoped to matches');
   assert.match(output, /Entries: 1/, 'summary counts matches only');
 });
 
@@ -360,6 +360,17 @@ test('parseArgs compiles --match and rejects an invalid regex', () => {
   );
 });
 
+test('match tests the unquoted URL on the legacy CSV path', () => {
+  // The raw CSV field is quoted for comma URLs; an anchored regex must still
+  // match the real URL.
+  const parsed = parseCache('"https://a.example/x,y",200,100\n');
+  const { output } = runOps(parsed, [{ kind: 'list', value: '5' }], {
+    now: NOW,
+    match: /^https:\/\/a\.example\//,
+  });
+  assert.match(output, /a\.example\/x,y/, 'anchored regex matches a comma URL');
+});
+
 // --- CLI entry point ---
 
 test(
@@ -380,7 +391,7 @@ test(
       assert.match(r.stdout, /Usage: link-cache/, 'main ran via the symlink');
       assert.ok(
         !r.stderr.includes('deprecated'),
-        'the canonical bin name runs without a deprecation notice',
+        'the canonical bin name keeps stderr clean',
       );
     } finally {
       rmSync(dir, { recursive: true, force: true });

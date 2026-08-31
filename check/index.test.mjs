@@ -135,7 +135,11 @@ test(
 test('publicDirOf returns null when public is missing', () => {
   const site = mkdtempSync(join(tmpdir(), 'lnc-'));
   try {
-    assert.equal(publicDirOf(site), null, 'missing public dir is reported');
+    assert.equal(
+      publicDirOf(site),
+      null,
+      'null is returned for an absent public dir',
+    );
   } finally {
     rmSync(site, { recursive: true, force: true });
   }
@@ -199,7 +203,7 @@ test('missing public/ is a preflight failure: exit 2', () => {
       encoding: 'utf8',
     });
     assert.equal(r.status, 2, 'preflight failures exit 2');
-    assert.match(r.stderr, /public/, 'the missing dir is named');
+    assert.match(r.stderr, /public/, 'the error names the public dir');
   } finally {
     rmSync(site, { recursive: true, force: true });
   }
@@ -216,7 +220,7 @@ test('missing lychee binary is a preflight failure: exit 2', () => {
       env: { ...process.env, PATH: '' },
     });
     assert.equal(r.status, 2, 'preflight failures exit 2');
-    assert.match(r.stderr, /lychee not found/, 'the missing tool is named');
+    assert.match(r.stderr, /lychee not found/, 'the error names lychee');
   } finally {
     rmSync(site, { recursive: true, force: true });
   }

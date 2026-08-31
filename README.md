@@ -12,8 +12,8 @@ Two tools:
   (status, provenance, ages). (`refcache` is a deprecated alias.)
 
 With a committed `lychee.toml` and `link-cache.jsonc`, these give a site a
-self-contained, cached link-checking setup: fast reruns, and diffs that only
-change when links actually change.
+self-contained, cached link-checking setup: fast reruns, and diffs that reflect
+real changes — link statuses, and check recency for freshly re-verified entries.
 
 ## The owned cache: `link-cache.jsonc`
 
@@ -59,9 +59,12 @@ Each entry records:
 
 Lychee's own CSV cache, `.lycheecache`, is **derived**: `lychee-norm-cache`
 projects the owned cache into it before each run and folds lychee's results back
-afterwards. Gitignore `.lycheecache`; commit `link-cache.jsonc`. Lychee re-check
-results overwrite an entry only when its status changes; an entry lychee drops
-(it never persists errors) is recorded as a negative tool-error status.
+afterwards. Gitignore `.lycheecache`; commit `link-cache.jsonc`. A re-check that
+changes an entry's status replaces the entry (provenance moves to `lychee`); a
+re-confirmation leaves provenance-bearing entries (`manual`, named resolvers)
+untouched, while `lychee`-owned entries refresh their `when` to record recency.
+An entry lychee drops (it never persists errors) is recorded as a negative
+tool-error status.
 
 Without a `link-cache.jsonc`, `lychee-norm-cache` falls back to the legacy mode:
 normalize the committed `.lycheecache` in place. To migrate:
@@ -106,7 +109,7 @@ npm install --save-dev link-cache
 Or, to install from GitHub rather than the npm registry:
 
 ```sh
-npm install --save-dev github:chalin/link-cache#semver:^0.3.0
+npm install --save-dev github:chalin/link-cache#semver:^0.4.0
 ```
 
 This puts both bins on your project's `PATH`.

@@ -233,7 +233,9 @@ export function runOps(
   const removed = new Set();
   let pruned = 0;
   const out = [];
-  const inScope = (e) => (match ? match.test(e.url) : true);
+  // Match against the unquoted URL: legacy-CSV entries carry the raw
+  // (possibly CSV-quoted) field, which would defeat anchored regexes.
+  const inScope = (e) => (match ? match.test(displayUrl(e.url)) : true);
   const current = () =>
     parsed.entries.filter((e) => !removed.has(e.index) && inScope(e));
 
