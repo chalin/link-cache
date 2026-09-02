@@ -135,6 +135,7 @@ Wire the bins into your `package.json` scripts (bare names — `npm run` puts
 npm run check:links              # sync caches, run lychee, fold results back
 npm run link-cache -- --summary  # cache stats (count, oldest, status, via, ages)
 npm run link-cache -- --match 'github\.com' --prune 10  # trim 10 oldest matching
+npm run link-cache -- --no-manual --list 5  # 5 oldest, skipping manual seeds
 ```
 
 > [!WARNING]
