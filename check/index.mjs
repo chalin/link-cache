@@ -130,9 +130,9 @@ export function mapLycheeExit(code, summary) {
 }
 
 // URLs the run itself reported as failing: the human per-URL lines, or
-// --format json's fail_map. Positive per-URL evidence for the merge-back's
-// failure recording; CSV absence alone proves nothing (cache_exclude_status,
-// max_cache_age, and site changes all remove entries from healthy runs).
+// --format json's failure maps. Positive per-URL evidence for the merge-back's
+// failure recording (CSV absence alone proves nothing: merge-back rules,
+// lib/cache.mjs).
 //
 // Line shapes (lychee 0.24, verified against live output and Status::
 // code_as_string in its source): failures carry the word tags ERROR or
@@ -143,10 +143,10 @@ export function mapLycheeExit(code, summary) {
 // whitelisted, not blacklisted: the others (EXCLUDED; IGNORED, unsupported
 // URLs printed on green runs; UNKNOWN, mail outside lychee's is_error) are
 // non-failures, as are lychee's log-level lines ([INFO], [WARN], …), and a
-// recorded failure becomes a committed cache entry that never heals (status
-// <= 0 never projects), making a false positive costlier than a false
-// negative. For the same reason the URL token must look like a URL: absolute
-// with scheme:// or mailto: (the one scheme://-less form lychee checks).
+// recorded failure becomes a committed cache entry (merge-back rules again),
+// making a false positive costlier than a false negative. For the same reason
+// the URL token must look like a URL: absolute with scheme:// or mailto:
+// (the one scheme://-less form lychee checks).
 const FAILURE_TAGS = new Set(['ERROR', 'TIMEOUT']);
 const URL_SHAPE = /^(\w[\w+.-]*:\/\/|mailto:)/;
 export function parseFailedUrls(stdout) {
