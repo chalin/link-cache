@@ -224,8 +224,9 @@ export function formatStats(stats, { now = Date.now() / 1000, path } = {}) {
 // --- ordered execution -----------------------------------------------------
 
 // Run the parsed ops in order over the evolving cache, optionally scoped to
-// URLs matching `match`. Pure: returns the text to print and the text to write
-// (null when nothing was pruned); no I/O.
+// URLs matching `match` and, with `noManual`, to non-manual entries. Pure:
+// returns the text to print and the text to write (null when nothing was
+// pruned); no I/O.
 export function runOps(
   parsed,
   ops,
