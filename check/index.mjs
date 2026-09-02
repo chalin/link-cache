@@ -18,6 +18,8 @@ import { fileURLToPath } from 'node:url';
 import {
   CSV_FILE,
   OWNED_FILE,
+  RESULT_ERROR,
+  RESULT_TIMEOUT,
   mergeBack,
   migrateCsvText,
   parseCsv,
@@ -34,7 +36,7 @@ export const EXIT_OK = 0;
 export const EXIT_DEAD_LINKS = 1;
 export const EXIT_PREFLIGHT = 2;
 
-const USAGE = `Usage: lychee-norm-cache [--migrate] [lychee args...]
+const USAGE = `Usage: lychee-norm-cache [--check-stale] [--migrate] [lychee args...]
 
 Run lychee over this site's built ./public output. With a committed
 ${OWNED_FILE}, the ${CSV_FILE} handed to lychee is derived from it before the
@@ -42,8 +44,15 @@ run and folded back into it afterwards; otherwise ${CSV_FILE} is normalized in
 place (legacy mode). Bridges a GitHub token from the gh CLI when GITHUB_TOKEN
 isn't set; extra arguments pass through to lychee.
 
-  --migrate    convert an existing ${CSV_FILE} to ${OWNED_FILE} and exit
-  -h, --help   show this help
+By default staleness checks are not applied: every cached entry projects with
+a fresh timestamp, so a run verifies only URLs not in the cache. With
+--check-stale, real timestamps project, so lychee's max_cache_age and manual
+expires dates bite and stale entries are re-verified (the refresh lane's
+mode).
+
+  --check-stale  apply staleness checks (re-verify stale and expired entries)
+  --migrate      convert an existing ${CSV_FILE} to ${OWNED_FILE} and exit
+  -h, --help     show this help
 
 Exit codes: 0 success; 1 dead links; 2 preflight/sanity failure (missing
 lychee or public/, lychee config or usage errors, zero links verified).
@@ -129,10 +138,11 @@ export function mapLycheeExit(code, summary) {
   return EXIT_PREFLIGHT;
 }
 
-// URLs the run itself reported as failing: the human per-URL lines, or
-// --format json's failure maps. Positive per-URL evidence for the merge-back's
-// failure recording (CSV absence alone proves nothing: merge-back rules,
-// lib/cache.mjs).
+// URLs the run itself reported as failing, mapped to a failure word from
+// lychee's own tag vocabulary ("error" or "timeout"): the human per-URL
+// lines, or --format json's failure maps. Positive per-URL evidence for the
+// merge-back's failure recording (CSV absence alone proves nothing:
+// merge-back rules, lib/cache.mjs).
 //
 // Line shapes (lychee 0.24, verified against live output and Status::
 // code_as_string in its source): failures carry the word tags ERROR or
@@ -151,7 +161,7 @@ const FAILURE_TAGS = new Set(['ERROR', 'TIMEOUT']);
 const URL_SHAPE = /^(\w[\w+.-]*:\/\/|mailto:)/;
 export function parseFailedUrls(stdout) {
   stdout = stripAnsi(stdout);
-  const failed = new Set();
+  const failed = new Map();
   const trimmed = stdout.trim();
   if (trimmed.startsWith('{')) {
     // --format json, possibly with a trailing human "Hint:" line after the
@@ -159,11 +169,15 @@ export function parseFailedUrls(stdout) {
     // fail_map covers older lychee.
     try {
       const json = JSON.parse(trimmed.slice(0, trimmed.lastIndexOf('}') + 1));
-      for (const map of [json.fail_map, json.error_map, json.timeout_map]) {
+      for (const [map, word] of [
+        [json.fail_map, RESULT_ERROR],
+        [json.error_map, RESULT_ERROR],
+        [json.timeout_map, RESULT_TIMEOUT],
+      ]) {
         for (const failures of Object.values(map ?? {})) {
           for (const f of failures) {
             const url = typeof f.url === 'string' ? f.url : f.url?.url;
-            if (url) failed.add(url);
+            if (url) failed.set(url, word);
           }
         }
       }
@@ -178,10 +192,17 @@ export function parseFailedUrls(stdout) {
     if (/^\d+$/.test(tag)) {
       if (
         /\|\s*(Rejected|Failed|Error \(cached\)|Request timed out)/.test(rest)
-      )
-        failed.add(url);
+      ) {
+        failed.set(
+          url,
+          /Request timed out/.test(rest) ? RESULT_TIMEOUT : RESULT_ERROR,
+        );
+      }
     } else if (FAILURE_TAGS.has(tag.toUpperCase())) {
-      failed.add(url);
+      failed.set(
+        url,
+        tag.toUpperCase() === 'TIMEOUT' ? RESULT_TIMEOUT : RESULT_ERROR,
+      );
     }
   }
   return failed;
@@ -233,6 +254,10 @@ function main(argv) {
   const cwd = process.cwd();
   if (argv.includes('--migrate')) return migrate(cwd);
 
+  // Wrapper-owned flag: consumed here, never forwarded to lychee.
+  const checkStale = argv.includes('--check-stale');
+  argv = argv.filter((a) => a !== '--check-stale');
+
   if (!hasLychee()) {
     return fail(`lychee not found. Install: ${INSTALL_HINT}`);
   }
@@ -259,12 +284,13 @@ function main(argv) {
   }
   const cacheArgs = hasCacheFlag ? [] : ['--cache'];
 
-  // Derive the CSV lychee will read from the owned cache.
+  // Derive the CSV lychee will read from the owned cache; keep the projected
+  // timestamps so merge-back can tell echoed cache hits from real re-checks.
+  let projectedTs = new Map();
   if (owned) {
-    writeFileAtomic(
-      cachePath,
-      serializeCsv(projectToCsv(owned.entries, { now })),
-    );
+    const projected = projectToCsv(owned.entries, { now, checkStale });
+    projectedTs = new Map(projected.map((e) => [e.url, e.ts]));
+    writeFileAtomic(cachePath, serializeCsv(projected));
   }
 
   const token = resolveToken();
@@ -320,14 +346,16 @@ function main(argv) {
     // Failure evidence counts only on a dead-links exit: a green run means
     // lychee accepted everything it printed (--accept-timeouts runs print
     // "[TIMEOUT] URL …" lines while exiting 0), so recording those would mint
-    // and churn -40 entries on every clean run.
+    // and churn failure entries on every clean run.
     const failedUrls =
       status === EXIT_DEAD_LINKS
         ? parseFailedUrls(run.stdout ?? '')
-        : new Set();
+        : new Map();
     writeFileAtomic(
       ownedPath,
-      serializeOwned(mergeBack(owned, csvEntries, { now, failedUrls })),
+      serializeOwned(
+        mergeBack(owned, csvEntries, { now, failedUrls, projectedTs }),
+      ),
     );
     writeFileAtomic(cachePath, sortCacheText(readFileSync(cachePath, 'utf8')));
   } else if (existsSync(cachePath)) {
