@@ -120,10 +120,19 @@ export function mapLycheeExit(code, summary) {
   return EXIT_PREFLIGHT;
 }
 
-// URLs the run itself reported as failing — the human "[ERROR] URL …" lines,
-// or --format json's fail_map. Positive per-URL evidence for the merge-back's
+// URLs the run itself reported as failing — the human per-URL lines, or
+// --format json's fail_map. Positive per-URL evidence for the merge-back's
 // failure recording; CSV absence alone proves nothing (cache_exclude_status,
 // max_cache_age, and site changes all remove entries from healthy runs).
+//
+// Line shapes (lychee 0.24, verified empirically): failures carry either a
+// word tag ("[ERROR] URL …", "[TIMEOUT] URL …") or a numeric status tag with a
+// rejection remark ("[403] URL … | Rejected status code: 403 Forbidden").
+// Numeric tags alone are not failures: -vv prints accepted URLs the same way
+// ("[200] URL (at 1:1)", "[200] URL | Cached: OK"), so a numeric tag counts
+// only with a failure remark. Word tags count except known non-failure states
+// (EXCLUDED, UNSUPPORTED, etc.).
+const NON_FAILURE_TAGS = new Set(['OK', 'CACHED', 'EXCLUDED', 'UNSUPPORTED']);
 export function parseFailedUrls(stdout) {
   const failed = new Set();
   const trimmed = stdout.trim();
@@ -141,8 +150,13 @@ export function parseFailedUrls(stdout) {
       // fall through to the line scan
     }
   }
-  for (const m of stdout.matchAll(/^\s*\[ERROR\]\s+(\S+)/gm)) {
-    failed.add(m[1]);
+  for (const m of stdout.matchAll(/^\s*\[(\w+)\]\s+(\S+)(.*)$/gm)) {
+    const [, tag, url, rest] = m;
+    if (/^\d+$/.test(tag)) {
+      if (/\|\s*(Rejected|Failed|Cached: Error)/.test(rest)) failed.add(url);
+    } else if (!NON_FAILURE_TAGS.has(tag.toUpperCase())) {
+      failed.add(url);
+    }
   }
   return failed;
 }

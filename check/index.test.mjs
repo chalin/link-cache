@@ -274,6 +274,44 @@ test('parseFailedUrls reads human [ERROR] lines', () => {
   );
 });
 
+test('parseFailedUrls reads status-bracket rejection lines', () => {
+  // Real lychee 0.24 shapes: HTTP rejections carry a numeric status tag, not
+  // [ERROR] (docsy run 33607424643); timeouts carry [TIMEOUT].
+  const out = [
+    '[urls.txt]:',
+    '[403] https://cloud-native.slack.com/archives/CUJ6W5TLM | Rejected status code: 403 Forbidden | Followed 1 redirect. Redirects: x',
+    '  [404] https://httpbin.org/status/404 (at 1:1) | Rejected status code: 404 Not Found',
+    '[TIMEOUT] https://slow.example/ | Timeout',
+    '🔍 3 Total (in 1s) 🔗 3 Unique ✅ 0 OK 🚫 3 Errors',
+  ].join('\n');
+  assert.deepEqual(
+    [...parseFailedUrls(out)].sort(),
+    [
+      'https://cloud-native.slack.com/archives/CUJ6W5TLM',
+      'https://httpbin.org/status/404',
+      'https://slow.example/',
+    ],
+    'status-bracket and timeout failures extracted',
+  );
+});
+
+test('parseFailedUrls ignores verbose success lines', () => {
+  // `lychee -vv` prints per-URL success lines with a numeric status tag and
+  // (for cached results) a `| Cached:` suffix; neither is a failure.
+  const out = [
+    '[200] https://ok.example/ (at 2:1)',
+    '[200] https://cached.example/ | Cached: OK (cached)',
+    '[301] https://moved.example/ (at 3:1)',
+    '[404] https://dead.example/ (at 1:1) | Rejected status code: 404 Not Found',
+    '🔍 4 Total (in 1s) 🔗 4 Unique ✅ 3 OK 🚫 1 Error',
+  ].join('\n');
+  assert.deepEqual(
+    [...parseFailedUrls(out)],
+    ['https://dead.example/'],
+    'only the rejected URL is treated as failing',
+  );
+});
+
 test('parseFailedUrls reads --format json fail_map', () => {
   const out = JSON.stringify({
     total: 2,
