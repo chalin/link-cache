@@ -49,7 +49,11 @@ function makeSite({ stdout = '', exit = 0, csvAfterRun = null } = {}) {
     lines.push(`cp ${JSON.stringify(join(site, 'csv-after'))} .lycheecache`);
     writeFileSync(join(site, 'csv-after'), csvAfterRun);
   }
-  lines.push(`printf '%s\\n' ${JSON.stringify(stdout)}`, `exit ${exit}`);
+  // stdout ships as a file the stub cats: printf '%s' would flatten real
+  // newlines into literal \n, hiding all but the first line from anchored
+  // line scans.
+  lines.push(`cat ${JSON.stringify(join(site, 'stdout-txt'))}`, `exit ${exit}`);
+  writeFileSync(join(site, 'stdout-txt'), stdout + '\n');
   writeFileSync(join(bin, 'lychee'), lines.join('\n') + '\n');
   chmodSync(join(bin, 'lychee'), 0o755);
   return site;
@@ -271,6 +275,163 @@ test('parseFailedUrls reads human [ERROR] lines', () => {
     [...parseFailedUrls(out)].sort(),
     ['file:///site/missing.html', 'https://dead.example/'],
     'both failing URLs extracted',
+  );
+});
+
+test('parseFailedUrls reads status-bracket rejection lines', () => {
+  // Real lychee 0.24 shapes: HTTP rejections carry a numeric status tag, not
+  // [ERROR] (docsy run 33607424643); timeouts carry [TIMEOUT].
+  const out = [
+    '[urls.txt]:',
+    '[403] https://cloud-native.slack.com/archives/CUJ6W5TLM | Rejected status code: 403 Forbidden | Followed 1 redirect. Redirects: x',
+    '  [404] https://httpbin.org/status/404 (at 1:1) | Rejected status code: 404 Not Found',
+    '[TIMEOUT] https://slow.example/ | Request timed out',
+    '[504] https://gw-timeout.example/ | Request timed out',
+    '🔍 4 Total (in 1s) 🔗 4 Unique ✅ 0 OK 🚫 4 Errors',
+  ].join('\n');
+  assert.deepEqual(
+    [...parseFailedUrls(out)].sort(),
+    [
+      'https://cloud-native.slack.com/archives/CUJ6W5TLM',
+      'https://gw-timeout.example/',
+      'https://httpbin.org/status/404',
+      'https://slow.example/',
+    ],
+    'status-bracket and timeout failures extracted',
+  );
+});
+
+test('parseFailedUrls ignores non-failure word tags', () => {
+  // Captured live from lychee 0.24.2: unsupported URLs print [IGNORED] on an
+  // otherwise green run (exit 0, "0 Errors"), and unknown mail statuses print
+  // [UNKNOWN]; neither is in lychee's is_error set.
+  const out = [
+    '[IGNORED] slack://open?team=T123 (at 1:1) | Unsupported: Failed to create HTTP request client: builder error for url (slack://open?team=T123)',
+    '[UNKNOWN] mailto:user@example.com | Unknown mail status',
+    '[EXCLUDED] https://excluded.example/ (at 2:1)',
+    '[200] https://www.google.com/ (at 3:1)',
+    '🔍 4 Total (in 1s) 🔗 4 Unique ✅ 1 OK 🚫 0 Errors ⛔ 1 Unsupported',
+  ].join('\n');
+  assert.equal(
+    parseFailedUrls(out).size,
+    0,
+    'a green run with unsupported and unknown URLs reports nothing failing',
+  );
+});
+
+test('parseFailedUrls captures mailto failures', () => {
+  // Captured live (--include-mail): a failing mail address prints [ERROR]
+  // with a mailto: URL (absolute but scheme://-less) and counts in Errors.
+  const out = [
+    '[ERROR] mailto:nobody@dead.example (at 1:8) | No MX records found for domain',
+    '🔍 1 Total (in 1s) 🔗 1 Unique ✅ 0 OK 🚫 1 Error',
+  ].join('\n');
+  assert.deepEqual(
+    [...parseFailedUrls(out)],
+    ['mailto:nobody@dead.example'],
+    'the failing mailto is captured',
+  );
+});
+
+test('parseFailedUrls ignores verbose success lines', () => {
+  // `lychee -vv` prints per-URL success lines with a numeric status tag and
+  // (for cached results) an `| OK (cached)` suffix; neither is a failure.
+  const out = [
+    '[200] https://ok.example/ (at 2:1)',
+    '[200] https://cached.example/ | OK (cached)',
+    '[301] https://moved.example/ (at 3:1)',
+    '[404] https://dead.example/ (at 1:1) | Rejected status code: 404 Not Found',
+    '🔍 4 Total (in 1s) 🔗 4 Unique ✅ 3 OK 🚫 1 Error',
+  ].join('\n');
+  assert.deepEqual(
+    [...parseFailedUrls(out)],
+    ['https://dead.example/'],
+    'only the rejected URL is treated as failing',
+  );
+});
+
+test('parseFailedUrls treats cached errors as failures', () => {
+  // `Error (cached)` is lychee's cached-failure remark (binary display
+  // variants: OK/Error/Excluded/Unsupported "(cached)").
+  const out = [
+    '[404] https://dead.example/ | Error (cached)',
+    '[200] https://ok.example/ | OK (cached)',
+    '🔍 2 Total (in 1s) 🔗 2 Unique ✅ 1 OK 🚫 1 Error',
+  ].join('\n');
+  assert.deepEqual(
+    [...parseFailedUrls(out)],
+    ['https://dead.example/'],
+    'the cached error is treated as failing',
+  );
+});
+
+test('parsers see through ANSI color codes', () => {
+  // Fixture captured live from lychee 0.24.2 under CLICOLOR_FORCE=1; the
+  // stripping rationale lives with stripAnsi.
+  const out = [
+    '\x1b[38;5;197m\x1b[1mIssues found in 1 input. Find details below.',
+    '',
+    '\x1b[0m\x1b[38;5;11m\x1b[1m[u.txt]:',
+    '\x1b[0m\x1b[38;5;197m   [404]\x1b[0m https://dead.example/ (at 1:1) | Rejected status code: 404 Not Found',
+    '',
+    '🔍 2 Total\x1b[2m (in 355ms)\x1b[0m 🔗 2 Unique\x1b[38;5;82m\x1b[1m ✅ 1 OK\x1b[0m\x1b[38;5;197m\x1b[1m 🚫 1 Error\x1b[0m',
+  ].join('\n');
+  assert.deepEqual(
+    [...parseFailedUrls(out)],
+    ['https://dead.example/'],
+    'the color-wrapped failure line is parsed',
+  );
+  assert.deepEqual(
+    parseSummary(out),
+    { total: 2, ok: 1, errors: 1 },
+    'the color-wrapped summary is parsed',
+  );
+});
+
+test('parseFailedUrls ignores log-level lines', () => {
+  // lychee's own log lines are bracket-tagged too ([INFO] cache notices,
+  // [WARN] cache-load errors, both captured live from 0.24.2); their second
+  // token is prose, not a URL.
+  const out = [
+    '  [INFO] Cache is recent (age: 0s, max age: 1d 0h 0m 0s). Using.',
+    '  [WARN] Error while loading cache: CSV deserialize error. Continuing without.',
+    '[404] https://dead.example/ (at 1:1) | Rejected status code: 404 Not Found',
+    '🔍 1 Total (in 1s) 🔗 1 Unique ✅ 0 OK 🚫 1 Error',
+  ].join('\n');
+  assert.deepEqual(
+    [...parseFailedUrls(out)],
+    ['https://dead.example/'],
+    'log lines contribute nothing',
+  );
+});
+
+test('parseFailedUrls reads --format json error and timeout maps', () => {
+  // Real lychee 0.24.2 --format json shape (verified live): failures live in
+  // error_map/timeout_map keyed by input source, and a human "Hint:" line can
+  // trail the JSON document.
+  const out =
+    JSON.stringify({
+      total: 3,
+      successful: 1,
+      errors: 2,
+      error_map: {
+        'u.txt': [
+          {
+            url: 'https://dead.example/',
+            status: { text: 'Rejected status code: 404 Not Found', code: 404 },
+          },
+        ],
+      },
+      timeout_map: {
+        'u.txt': [
+          { url: 'https://slow.example/', status: { text: 'Timeout' } },
+        ],
+      },
+    }) + '\nHint: You can configure accepted/rejected response codes with `-a`';
+  assert.deepEqual(
+    [...parseFailedUrls(out)].sort(),
+    ['https://dead.example/', 'https://slow.example/'],
+    'error_map and timeout_map URLs extracted despite the trailing hint',
   );
 });
 
@@ -545,6 +706,75 @@ test(
       const owned = readFileSync(join(site, 'link-cache.jsonc'), 'utf8');
       assert.match(owned, /"status": -40/, 'the failure is recorded');
       assert.match(owned, /\/\/ range seed/, 'the rationale comment is kept');
+    } finally {
+      rmSync(site, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
+  'a failure new to the cache becomes a tool-error entry',
+  { skip: WIN_SKIP },
+  () => {
+    // Empty owned cache, empty post-run CSV (failures are cache-excluded),
+    // real status-bracket failure lines: the run's own report is the only
+    // evidence, and it must still land in the owned cache. Two failing URLs
+    // guard against a flattened stub stdout (see makeSite).
+    const site = makeSite({
+      stdout: [
+        '[404] https://new-dead.example/ (at 1:1) | Rejected status code: 404 Not Found',
+        '[TIMEOUT] https://slow.example/ | Request timed out',
+        '🔍 2 Total (in 1s) 🔗 2 Unique ✅ 0 OK 🚫 2 Errors',
+      ].join('\n'),
+      exit: 2,
+      csvAfterRun: '',
+    });
+    writeFileSync(join(site, 'link-cache.jsonc'), '{}\n');
+    try {
+      const r = runWrapper(site);
+      assert.equal(r.status, 1, 'a completed run with failures exits 1');
+      const owned = readFileSync(join(site, 'link-cache.jsonc'), 'utf8');
+      assert.match(
+        owned,
+        /"https:\/\/new-dead\.example\/"/,
+        'the URL is keyed',
+      );
+      assert.match(
+        owned,
+        /"https:\/\/slow\.example\/"/,
+        'the timeout is keyed',
+      );
+      assert.match(owned, /"status": -40/, 'the failure is recorded');
+    } finally {
+      rmSync(site, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
+  'a green run records no failures despite failure-shaped lines',
+  { skip: WIN_SKIP },
+  () => {
+    // Captured live from lychee 0.24.2: --accept-timeouts runs print
+    // "[TIMEOUT] URL | Request timed out" while exiting 0 with "0 Errors";
+    // the gating rationale lives with the wrapper's failure-evidence gate.
+    const site = makeSite({
+      stdout: [
+        '[TIMEOUT] http://10.255.255.1/ (at 1:1) | Request timed out',
+        '🔍 2 Total (in 19s) 🔗 2 Unique ✅ 1 OK 🚫 0 Errors ⏳ 1 Timeouts',
+      ].join('\n'),
+      exit: 0,
+      csvAfterRun: '',
+    });
+    writeFileSync(join(site, 'link-cache.jsonc'), '{}\n');
+    try {
+      const r = runWrapper(site);
+      assert.equal(r.status, 0, 'the green run stays green');
+      assert.equal(
+        readFileSync(join(site, 'link-cache.jsonc'), 'utf8'),
+        '{}\n',
+        'the accepted timeout mints no cache entry',
+      );
     } finally {
       rmSync(site, { recursive: true, force: true });
     }

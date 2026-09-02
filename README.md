@@ -56,6 +56,11 @@ Each entry records:
   chronological.
 - **`via`** — the resolver that set the status: `lychee`, `manual`
   (hand-seeded), or a named specialized resolver (e.g. a browser-grade probe).
+  Key hand-seeded entries by the URL exactly as lychee prints it: lowercase
+  host, no default port, resolved dot segments, and a `/` path on bare hosts
+  (`https://example.com/`, never `https://example.com`). Results merge back by
+  byte-for-byte key comparison, so a non-canonical spelling never matches its
+  re-check.
 - **`expires`** (optional, `manual` entries) — `YYYY-MM-DD`. Until then the
   entry is trusted (never re-checked, overriding lychee's `max_cache_age`);
   after that, it's re-checked live and replaced by the verified result.
@@ -69,7 +74,9 @@ untouched, while `lychee`-owned entries refresh their `when` to record recency.
 A URL the run itself reports as failing is recorded as a negative tool-error
 status; an entry that merely goes missing from lychee's CSV is left untouched
 (cache-status excludes, cache aging, and site changes all remove entries from
-healthy runs).
+healthy runs). Failure evidence counts only on a dead-links exit, and new
+failure entries mint for http(s) URLs only; for the rationale, see `mergeBack`'s
+contract in `lib/cache.mjs`.
 
 Without a `link-cache.jsonc`, `lychee-norm-cache` falls back to the legacy mode:
 normalize the committed `.lycheecache` in place. To migrate:
@@ -135,6 +142,7 @@ Wire the bins into your `package.json` scripts (bare names — `npm run` puts
 npm run check:links              # sync caches, run lychee, fold results back
 npm run link-cache -- --summary  # cache stats (count, oldest, status, via, ages)
 npm run link-cache -- --match 'github\.com' --prune 10  # trim 10 oldest matching
+npm run link-cache -- --no-manual --list 5  # 5 oldest, skipping manual seeds
 ```
 
 > [!WARNING]

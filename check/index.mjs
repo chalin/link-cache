@@ -92,10 +92,19 @@ export function publicDirOf(cwd) {
   return publicDir;
 }
 
+// lychee colors its output when CLICOLOR_FORCE is set (even onto the piped
+// stdout we capture, since the spawn env passes process.env through), and SGR
+// codes around the tags defeat the line parsers (captured live from 0.24.2),
+// so failures would vanish silently. Strip before parsing.
+function stripAnsi(s) {
+  return s.replace(/\x1b\[[0-9;]*m/g, '');
+}
+
 // Check counts from lychee's stdout summary — the human line ("🔍 2 Total …
 // ✅ 1 OK 🚫 0 Errors …") or --format json fields; null when neither is
 // present. A parsed summary is the proof that a check actually completed.
 export function parseSummary(stdout) {
+  stdout = stripAnsi(stdout);
   const m = /(\d+)\s+Total\b[\s\S]*?(\d+)\s+OK\b[\s\S]*?(\d+)\s+Errors?\b/.exec(
     stdout,
   );
@@ -120,20 +129,42 @@ export function mapLycheeExit(code, summary) {
   return EXIT_PREFLIGHT;
 }
 
-// URLs the run itself reported as failing — the human "[ERROR] URL …" lines,
-// or --format json's fail_map. Positive per-URL evidence for the merge-back's
-// failure recording; CSV absence alone proves nothing (cache_exclude_status,
-// max_cache_age, and site changes all remove entries from healthy runs).
+// URLs the run itself reported as failing: the human per-URL lines, or
+// --format json's failure maps. Positive per-URL evidence for the merge-back's
+// failure recording (CSV absence alone proves nothing: merge-back rules,
+// lib/cache.mjs).
+//
+// Line shapes (lychee 0.24, verified against live output and Status::
+// code_as_string in its source): failures carry the word tags ERROR or
+// TIMEOUT, or a numeric status tag with a failure remark ("[403] URL … |
+// Rejected status code: 403 Forbidden", "[404] URL | Error (cached)").
+// Numeric tags alone are not failures: -vv prints accepted URLs the same way
+// ("[200] URL (at 1:1)", "[200] URL | OK (cached)"). Word tags are
+// whitelisted, not blacklisted: the others (EXCLUDED; IGNORED, unsupported
+// URLs printed on green runs; UNKNOWN, mail outside lychee's is_error) are
+// non-failures, as are lychee's log-level lines ([INFO], [WARN], …), and a
+// recorded failure becomes a committed cache entry (merge-back rules again),
+// making a false positive costlier than a false negative. For the same reason
+// the URL token must look like a URL: absolute with scheme:// or mailto:
+// (the one scheme://-less form lychee checks).
+const FAILURE_TAGS = new Set(['ERROR', 'TIMEOUT']);
+const URL_SHAPE = /^(\w[\w+.-]*:\/\/|mailto:)/;
 export function parseFailedUrls(stdout) {
+  stdout = stripAnsi(stdout);
   const failed = new Set();
   const trimmed = stdout.trim();
   if (trimmed.startsWith('{')) {
+    // --format json, possibly with a trailing human "Hint:" line after the
+    // document. Failures live in error_map/timeout_map (0.24's shape);
+    // fail_map covers older lychee.
     try {
-      const failMap = JSON.parse(trimmed).fail_map ?? {};
-      for (const failures of Object.values(failMap)) {
-        for (const f of failures) {
-          const url = typeof f.url === 'string' ? f.url : f.url?.url;
-          if (url) failed.add(url);
+      const json = JSON.parse(trimmed.slice(0, trimmed.lastIndexOf('}') + 1));
+      for (const map of [json.fail_map, json.error_map, json.timeout_map]) {
+        for (const failures of Object.values(map ?? {})) {
+          for (const f of failures) {
+            const url = typeof f.url === 'string' ? f.url : f.url?.url;
+            if (url) failed.add(url);
+          }
         }
       }
       return failed;
@@ -141,8 +172,17 @@ export function parseFailedUrls(stdout) {
       // fall through to the line scan
     }
   }
-  for (const m of stdout.matchAll(/^\s*\[ERROR\]\s+(\S+)/gm)) {
-    failed.add(m[1]);
+  for (const m of stdout.matchAll(/^\s*\[(\w+)\]\s+(\S+)(.*)$/gm)) {
+    const [, tag, url, rest] = m;
+    if (!URL_SHAPE.test(url)) continue;
+    if (/^\d+$/.test(tag)) {
+      if (
+        /\|\s*(Rejected|Failed|Error \(cached\)|Request timed out)/.test(rest)
+      )
+        failed.add(url);
+    } else if (FAILURE_TAGS.has(tag.toUpperCase())) {
+      failed.add(url);
+    }
   }
   return failed;
 }
@@ -277,7 +317,14 @@ function main(argv) {
     const csvEntries = existsSync(cachePath)
       ? parseCsv(readFileSync(cachePath, 'utf8')).entries
       : [];
-    const failedUrls = parseFailedUrls(run.stdout ?? '');
+    // Failure evidence counts only on a dead-links exit: a green run means
+    // lychee accepted everything it printed (--accept-timeouts runs print
+    // "[TIMEOUT] URL …" lines while exiting 0), so recording those would mint
+    // and churn -40 entries on every clean run.
+    const failedUrls =
+      status === EXIT_DEAD_LINKS
+        ? parseFailedUrls(run.stdout ?? '')
+        : new Set();
     writeFileAtomic(
       ownedPath,
       serializeOwned(mergeBack(owned, csvEntries, { now, failedUrls })),
