@@ -74,7 +74,10 @@ untouched, while `lychee`-owned entries refresh their `when` to record recency.
 A URL the run itself reports as failing is recorded as a negative tool-error
 status; an entry that merely goes missing from lychee's CSV is left untouched
 (cache-status excludes, cache aging, and site changes all remove entries from
-healthy runs).
+healthy runs). Failure evidence only counts on a dead-links exit (a green
+`--accept-timeouts` run may still print `[TIMEOUT]` lines), and new failure
+entries mint for http(s) URLs only — `file://` and `mailto:` never round-trip
+through lychee's cache, so a recorded failure could never heal.
 
 Without a `link-cache.jsonc`, `lychee-norm-cache` falls back to the legacy mode:
 normalize the committed `.lycheecache` in place. To migrate:

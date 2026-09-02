@@ -286,12 +286,14 @@ test('parseFailedUrls reads status-bracket rejection lines', () => {
     '[403] https://cloud-native.slack.com/archives/CUJ6W5TLM | Rejected status code: 403 Forbidden | Followed 1 redirect. Redirects: x',
     '  [404] https://httpbin.org/status/404 (at 1:1) | Rejected status code: 404 Not Found',
     '[TIMEOUT] https://slow.example/ | Request timed out',
-    '🔍 3 Total (in 1s) 🔗 3 Unique ✅ 0 OK 🚫 3 Errors',
+    '[504] https://gw-timeout.example/ | Request timed out',
+    '🔍 4 Total (in 1s) 🔗 4 Unique ✅ 0 OK 🚫 4 Errors',
   ].join('\n');
   assert.deepEqual(
     [...parseFailedUrls(out)].sort(),
     [
       'https://cloud-native.slack.com/archives/CUJ6W5TLM',
+      'https://gw-timeout.example/',
       'https://httpbin.org/status/404',
       'https://slow.example/',
     ],
@@ -747,6 +749,37 @@ test(
         'the timeout is keyed',
       );
       assert.match(owned, /"status": -40/, 'the failure is recorded');
+    } finally {
+      rmSync(site, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
+  'a green run records no failures despite failure-shaped lines',
+  { skip: WIN_SKIP },
+  () => {
+    // --accept-timeouts runs print "[TIMEOUT] URL | Request timed out" while
+    // exiting 0 with "0 Errors" (captured live from lychee 0.24.2): the user
+    // declared those non-failures, so recording them would mint -40 entries —
+    // and refresh their ts — on every clean run.
+    const site = makeSite({
+      stdout: [
+        '[TIMEOUT] http://10.255.255.1/ (at 1:1) | Request timed out',
+        '🔍 2 Total (in 19s) 🔗 2 Unique ✅ 1 OK 🚫 0 Errors ⏳ 1 Timeouts',
+      ].join('\n'),
+      exit: 0,
+      csvAfterRun: '',
+    });
+    writeFileSync(join(site, 'link-cache.jsonc'), '{}\n');
+    try {
+      const r = runWrapper(site);
+      assert.equal(r.status, 0, 'the green run stays green');
+      assert.equal(
+        readFileSync(join(site, 'link-cache.jsonc'), 'utf8'),
+        '{}\n',
+        'the accepted timeout mints no cache entry',
+      );
     } finally {
       rmSync(site, { recursive: true, force: true });
     }

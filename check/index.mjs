@@ -176,7 +176,10 @@ export function parseFailedUrls(stdout) {
     const [, tag, url, rest] = m;
     if (!URL_SHAPE.test(url)) continue;
     if (/^\d+$/.test(tag)) {
-      if (/\|\s*(Rejected|Failed|Error \(cached\))/.test(rest)) failed.add(url);
+      if (
+        /\|\s*(Rejected|Failed|Error \(cached\)|Request timed out)/.test(rest)
+      )
+        failed.add(url);
     } else if (FAILURE_TAGS.has(tag.toUpperCase())) {
       failed.add(url);
     }
@@ -314,7 +317,14 @@ function main(argv) {
     const csvEntries = existsSync(cachePath)
       ? parseCsv(readFileSync(cachePath, 'utf8')).entries
       : [];
-    const failedUrls = parseFailedUrls(run.stdout ?? '');
+    // Failure evidence counts only on a dead-links exit: a green run means
+    // lychee accepted everything it printed — --accept-timeouts runs print
+    // "[TIMEOUT] URL …" lines while exiting 0 — so recording those would mint
+    // and churn -40 entries on every clean run.
+    const failedUrls =
+      status === EXIT_DEAD_LINKS
+        ? parseFailedUrls(run.stdout ?? '')
+        : new Set();
     writeFileAtomic(
       ownedPath,
       serializeOwned(mergeBack(owned, csvEntries, { now, failedUrls })),
