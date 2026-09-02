@@ -49,7 +49,11 @@ function makeSite({ stdout = '', exit = 0, csvAfterRun = null } = {}) {
     lines.push(`cp ${JSON.stringify(join(site, 'csv-after'))} .lycheecache`);
     writeFileSync(join(site, 'csv-after'), csvAfterRun);
   }
-  lines.push(`printf '%s\\n' ${JSON.stringify(stdout)}`, `exit ${exit}`);
+  // stdout ships as a file the stub cats: printf '%s' would flatten real
+  // newlines into literal \n, hiding all but the first line from anchored
+  // line scans.
+  lines.push(`cat ${JSON.stringify(join(site, 'stdout-txt'))}`, `exit ${exit}`);
+  writeFileSync(join(site, 'stdout-txt'), stdout + '\n');
   writeFileSync(join(bin, 'lychee'), lines.join('\n') + '\n');
   chmodSync(join(bin, 'lychee'), 0o755);
   return site;
@@ -281,7 +285,7 @@ test('parseFailedUrls reads status-bracket rejection lines', () => {
     '[urls.txt]:',
     '[403] https://cloud-native.slack.com/archives/CUJ6W5TLM | Rejected status code: 403 Forbidden | Followed 1 redirect. Redirects: x',
     '  [404] https://httpbin.org/status/404 (at 1:1) | Rejected status code: 404 Not Found',
-    '[TIMEOUT] https://slow.example/ | Timeout',
+    '[TIMEOUT] https://slow.example/ | Request timed out',
     '🔍 3 Total (in 1s) 🔗 3 Unique ✅ 0 OK 🚫 3 Errors',
   ].join('\n');
   assert.deepEqual(
@@ -292,6 +296,39 @@ test('parseFailedUrls reads status-bracket rejection lines', () => {
       'https://slow.example/',
     ],
     'status-bracket and timeout failures extracted',
+  );
+});
+
+test('parseFailedUrls ignores non-failure word tags', () => {
+  // Captured live from lychee 0.24.2: unsupported URLs print [IGNORED] on an
+  // otherwise green run (exit 0, "0 Errors"), and unknown mail statuses print
+  // [UNKNOWN]; neither is in lychee's is_error set. Recording them would mint
+  // committed -40 entries that never heal (status <= 0 never projects).
+  const out = [
+    '[IGNORED] slack://open?team=T123 (at 1:1) | Unsupported: Failed to create HTTP request client: builder error for url (slack://open?team=T123)',
+    '[UNKNOWN] mailto:user@example.com | Unknown mail status',
+    '[EXCLUDED] https://excluded.example/ (at 2:1)',
+    '[200] https://www.google.com/ (at 3:1)',
+    '🔍 4 Total (in 1s) 🔗 4 Unique ✅ 1 OK 🚫 0 Errors ⛔ 1 Unsupported',
+  ].join('\n');
+  assert.equal(
+    parseFailedUrls(out).size,
+    0,
+    'a green run with unsupported and unknown URLs reports nothing failing',
+  );
+});
+
+test('parseFailedUrls captures mailto failures', () => {
+  // Captured live (--include-mail): a failing mail address prints [ERROR]
+  // with a mailto: URL — absolute but scheme://-less — and counts in Errors.
+  const out = [
+    '[ERROR] mailto:nobody@dead.example (at 1:8) | No MX records found for domain',
+    '🔍 1 Total (in 1s) 🔗 1 Unique ✅ 0 OK 🚫 1 Error',
+  ].join('\n');
+  assert.deepEqual(
+    [...parseFailedUrls(out)],
+    ['mailto:nobody@dead.example'],
+    'the failing mailto is captured',
   );
 });
 
@@ -680,13 +717,16 @@ test(
   'a failure new to the cache becomes a tool-error entry',
   { skip: WIN_SKIP },
   () => {
-    // Empty owned cache, empty post-run CSV (failures are cache-excluded), a
-    // real status-bracket failure line: the run's own report is the only
-    // evidence, and it must still land in the owned cache.
+    // Empty owned cache, empty post-run CSV (failures are cache-excluded),
+    // real status-bracket failure lines: the run's own report is the only
+    // evidence, and it must still land in the owned cache. Two failing URLs
+    // prove the stub emits real newlines (a flattened stdout would hide the
+    // second line from the anchored line scan).
     const site = makeSite({
       stdout: [
         '[404] https://new-dead.example/ (at 1:1) | Rejected status code: 404 Not Found',
-        '🔍 1 Total (in 1s) 🔗 1 Unique ✅ 0 OK 🚫 1 Error',
+        '[TIMEOUT] https://slow.example/ | Request timed out',
+        '🔍 2 Total (in 1s) 🔗 2 Unique ✅ 0 OK 🚫 2 Errors',
       ].join('\n'),
       exit: 2,
       csvAfterRun: '',
@@ -700,6 +740,11 @@ test(
         owned,
         /"https:\/\/new-dead\.example\/"/,
         'the URL is keyed',
+      );
+      assert.match(
+        owned,
+        /"https:\/\/slow\.example\/"/,
+        'the timeout is keyed',
       );
       assert.match(owned, /"status": -40/, 'the failure is recorded');
     } finally {

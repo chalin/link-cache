@@ -134,26 +134,21 @@ export function mapLycheeExit(code, summary) {
 // failure recording; CSV absence alone proves nothing (cache_exclude_status,
 // max_cache_age, and site changes all remove entries from healthy runs).
 //
-// Line shapes (lychee 0.24, verified empirically): failures carry either a
-// word tag ("[ERROR] URL …", "[TIMEOUT] URL …") or a numeric status tag with a
-// failure remark ("[403] URL … | Rejected status code: 403 Forbidden",
-// "[404] URL | Error (cached)"). Numeric tags alone are not failures: -vv
-// prints accepted URLs the same way ("[200] URL (at 1:1)",
-// "[200] URL | OK (cached)"), so a numeric tag counts only with a failure
-// remark. Word tags count except known non-failure states (EXCLUDED,
-// UNSUPPORTED, …) and log levels ([INFO]/[WARN] lines carry prose, not URLs);
-// since a recorded failure becomes a cache entry, the URL token must also
-// look like one (scheme://) — lychee only checks absolute URLs.
-const NON_FAILURE_TAGS = new Set([
-  'OK',
-  'CACHED',
-  'EXCLUDED',
-  'UNSUPPORTED',
-  'INFO',
-  'WARN',
-  'DEBUG',
-  'TRACE',
-]);
+// Line shapes (lychee 0.24, verified against live output and Status::
+// code_as_string in its source): failures carry the word tags ERROR or
+// TIMEOUT, or a numeric status tag with a failure remark ("[403] URL … |
+// Rejected status code: 403 Forbidden", "[404] URL | Error (cached)").
+// Numeric tags alone are not failures: -vv prints accepted URLs the same way
+// ("[200] URL (at 1:1)", "[200] URL | OK (cached)"). The other word tags are
+// non-failures — EXCLUDED, IGNORED (unsupported URL, printed on green runs),
+// UNKNOWN (mail; not in lychee's is_error) — as are its log-level lines
+// ([INFO], [WARN], …), so word tags are whitelisted, not blacklisted: a
+// recorded failure becomes a committed cache entry that never heals (status
+// <= 0 never projects), making a false positive costlier than a false
+// negative. For the same reason the URL token must look like a URL — absolute
+// with scheme:// or mailto: (the one scheme://-less form lychee checks).
+const FAILURE_TAGS = new Set(['ERROR', 'TIMEOUT']);
+const URL_SHAPE = /^(\w[\w+.-]*:\/\/|mailto:)/;
 export function parseFailedUrls(stdout) {
   stdout = stripAnsi(stdout);
   const failed = new Set();
@@ -179,10 +174,10 @@ export function parseFailedUrls(stdout) {
   }
   for (const m of stdout.matchAll(/^\s*\[(\w+)\]\s+(\S+)(.*)$/gm)) {
     const [, tag, url, rest] = m;
-    if (!/^\w[\w+.-]*:\/\//.test(url)) continue;
+    if (!URL_SHAPE.test(url)) continue;
     if (/^\d+$/.test(tag)) {
       if (/\|\s*(Rejected|Failed|Error \(cached\))/.test(rest)) failed.add(url);
-    } else if (!NON_FAILURE_TAGS.has(tag.toUpperCase())) {
+    } else if (FAILURE_TAGS.has(tag.toUpperCase())) {
       failed.add(url);
     }
   }

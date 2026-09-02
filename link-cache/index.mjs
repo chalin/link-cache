@@ -316,7 +316,8 @@ export function parseArgs(argv) {
       continue;
     }
     if (a === '--no-manual') {
-      if (noManual) throw new Error(`repeated flag: ${a}`);
+      if (seen.has('no-manual')) throw new Error(`repeated flag: ${a}`);
+      seen.add('no-manual');
       noManual = true;
       continue;
     }
