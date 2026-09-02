@@ -297,10 +297,10 @@ test('parseFailedUrls reads status-bracket rejection lines', () => {
 
 test('parseFailedUrls ignores verbose success lines', () => {
   // `lychee -vv` prints per-URL success lines with a numeric status tag and
-  // (for cached results) a `| Cached:` suffix; neither is a failure.
+  // (for cached results) an `| OK (cached)` suffix; neither is a failure.
   const out = [
     '[200] https://ok.example/ (at 2:1)',
-    '[200] https://cached.example/ | Cached: OK (cached)',
+    '[200] https://cached.example/ | OK (cached)',
     '[301] https://moved.example/ (at 3:1)',
     '[404] https://dead.example/ (at 1:1) | Rejected status code: 404 Not Found',
     '🔍 4 Total (in 1s) 🔗 4 Unique ✅ 3 OK 🚫 1 Error',
@@ -309,6 +309,46 @@ test('parseFailedUrls ignores verbose success lines', () => {
     [...parseFailedUrls(out)],
     ['https://dead.example/'],
     'only the rejected URL is treated as failing',
+  );
+});
+
+test('parseFailedUrls treats cached errors as failures', () => {
+  // `Error (cached)` is lychee's cached-failure remark (binary display
+  // variants: OK/Error/Excluded/Unsupported "(cached)").
+  const out = [
+    '[404] https://dead.example/ | Error (cached)',
+    '[200] https://ok.example/ | OK (cached)',
+    '🔍 2 Total (in 1s) 🔗 2 Unique ✅ 1 OK 🚫 1 Error',
+  ].join('\n');
+  assert.deepEqual(
+    [...parseFailedUrls(out)],
+    ['https://dead.example/'],
+    'the cached error is treated as failing',
+  );
+});
+
+test('parsers see through ANSI color codes', () => {
+  // CLICOLOR_FORCE=1 in the caller's env propagates to lychee and wraps tags
+  // in SGR codes even on a piped stdout (captured live from lychee 0.24.2);
+  // the summary regex tolerates the codes, so without stripping, failures
+  // would vanish silently.
+  const out = [
+    '\x1b[38;5;197m\x1b[1mIssues found in 1 input. Find details below.',
+    '',
+    '\x1b[0m\x1b[38;5;11m\x1b[1m[u.txt]:',
+    '\x1b[0m\x1b[38;5;197m   [404]\x1b[0m https://dead.example/ (at 1:1) | Rejected status code: 404 Not Found',
+    '',
+    '🔍 2 Total\x1b[2m (in 355ms)\x1b[0m 🔗 2 Unique\x1b[38;5;82m\x1b[1m ✅ 1 OK\x1b[0m\x1b[38;5;197m\x1b[1m 🚫 1 Error\x1b[0m',
+  ].join('\n');
+  assert.deepEqual(
+    [...parseFailedUrls(out)],
+    ['https://dead.example/'],
+    'the color-wrapped failure line is parsed',
+  );
+  assert.deepEqual(
+    parseSummary(out),
+    { total: 2, ok: 1, errors: 1 },
+    'the color-wrapped summary is parsed',
   );
 });
 

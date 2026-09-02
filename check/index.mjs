@@ -92,10 +92,19 @@ export function publicDirOf(cwd) {
   return publicDir;
 }
 
+// lychee colors its output when CLICOLOR_FORCE is set — even onto the piped
+// stdout we capture, since the spawn env passes process.env through — and SGR
+// codes around the tags defeat the line parsers (captured live from 0.24.2),
+// so failures would vanish silently. Strip before parsing.
+function stripAnsi(s) {
+  return s.replace(/\x1b\[[0-9;]*m/g, '');
+}
+
 // Check counts from lychee's stdout summary — the human line ("🔍 2 Total …
 // ✅ 1 OK 🚫 0 Errors …") or --format json fields; null when neither is
 // present. A parsed summary is the proof that a check actually completed.
 export function parseSummary(stdout) {
+  stdout = stripAnsi(stdout);
   const m = /(\d+)\s+Total\b[\s\S]*?(\d+)\s+OK\b[\s\S]*?(\d+)\s+Errors?\b/.exec(
     stdout,
   );
@@ -127,13 +136,15 @@ export function mapLycheeExit(code, summary) {
 //
 // Line shapes (lychee 0.24, verified empirically): failures carry either a
 // word tag ("[ERROR] URL …", "[TIMEOUT] URL …") or a numeric status tag with a
-// rejection remark ("[403] URL … | Rejected status code: 403 Forbidden").
-// Numeric tags alone are not failures: -vv prints accepted URLs the same way
-// ("[200] URL (at 1:1)", "[200] URL | Cached: OK"), so a numeric tag counts
-// only with a failure remark. Word tags count except known non-failure states
-// (EXCLUDED, UNSUPPORTED, etc.).
+// failure remark ("[403] URL … | Rejected status code: 403 Forbidden",
+// "[404] URL | Error (cached)"). Numeric tags alone are not failures: -vv
+// prints accepted URLs the same way ("[200] URL (at 1:1)",
+// "[200] URL | OK (cached)"), so a numeric tag counts only with a failure
+// remark. Word tags count except known non-failure states (EXCLUDED,
+// UNSUPPORTED, etc.).
 const NON_FAILURE_TAGS = new Set(['OK', 'CACHED', 'EXCLUDED', 'UNSUPPORTED']);
 export function parseFailedUrls(stdout) {
+  stdout = stripAnsi(stdout);
   const failed = new Set();
   const trimmed = stdout.trim();
   if (trimmed.startsWith('{')) {
@@ -153,7 +164,7 @@ export function parseFailedUrls(stdout) {
   for (const m of stdout.matchAll(/^\s*\[(\w+)\]\s+(\S+)(.*)$/gm)) {
     const [, tag, url, rest] = m;
     if (/^\d+$/.test(tag)) {
-      if (/\|\s*(Rejected|Failed|Cached: Error)/.test(rest)) failed.add(url);
+      if (/\|\s*(Rejected|Failed|Error \(cached\))/.test(rest)) failed.add(url);
     } else if (!NON_FAILURE_TAGS.has(tag.toUpperCase())) {
       failed.add(url);
     }
