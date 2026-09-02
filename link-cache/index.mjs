@@ -60,7 +60,7 @@ export function parseOwnedCache(text) {
   const owned = parseOwned(text);
   const entries = owned.entries.map((e, index) => ({
     url: e.url,
-    status: String(e.status),
+    status: String(e.result),
     ts: e.ts,
     via: e.via,
     index,
@@ -234,6 +234,7 @@ export function runOps(
 ) {
   const removed = new Set();
   let pruned = 0;
+  let guardFailed = false;
   const out = [];
   // Match against the unquoted URL: legacy-CSV entries carry the raw
   // (possibly CSV-quoted) field, which would defeat anchored regexes.
@@ -259,6 +260,34 @@ export function runOps(
       out.push(
         `Pruned ${k} oldest ${k === 1 ? 'entry' : 'entries'} (${cur.length} → ${cur.length - k}).`,
       );
+    } else if (op.kind === 'max-age') {
+      // Staleness guard: with staleness checks off by default in
+      // lychee-norm-cache, a dead refresh lane rots the cache silently; the
+      // oldest checked (non-manual) entry aging past the threshold is the
+      // signal. Manual seeds are exempt — their lifecycle is owned by their
+      // expires date, and under prune-refresh rotation they keep their
+      // original timestamp, so they'd trip the guard mid-lifecycle.
+      const cur = current().filter((e) => e.via !== 'manual');
+      const oldest = selectOldest(cur, 1)[0];
+      if (!oldest) {
+        out.push('Staleness guard: no checked entries; nothing to age.');
+      } else {
+        const ageDays = Math.floor((now - oldest.ts) / DAY);
+        const limit = Number(op.value);
+        if (ageDays > limit) {
+          guardFailed = true;
+          out.push(
+            `Staleness guard: oldest checked entry is ${ageDays}d old, ` +
+              `exceeds --max-age ${limit}d:\n  ${displayUrl(oldest.url)}\n` +
+              'Is the cache-refresh lane running?',
+          );
+        } else {
+          out.push(
+            `Staleness guard: oldest checked entry is ${ageDays}d old ` +
+              `(within --max-age ${limit}d).`,
+          );
+        }
+      }
     } else if (op.kind === 'summary') {
       const stats = computeStats(current(), {
         now,
@@ -286,7 +315,7 @@ export function runOps(
       writeText = parsed.lines.filter((_, i) => !removed.has(i)).join('\n');
     }
   }
-  return { output: out.join('\n\n'), writeText, pruned };
+  return { output: out.join('\n\n'), writeText, pruned, guardFailed };
 }
 
 // --- CLI -------------------------------------------------------------------
@@ -298,6 +327,7 @@ const FLAGS = new Map([
   ['--match', 'match'],
   ['-p', 'prune'],
   ['--prune', 'prune'],
+  ['--max-age', 'max-age'],
   ['-s', 'summary'],
   ['--summary', 'summary'],
 ]);
@@ -346,6 +376,9 @@ export function parseArgs(argv) {
       if (kind === 'prune' && !/^\d+%?$/.test(value)) {
         throw new Error(`--prune needs NUM or NUM%, got: ${value}`);
       }
+      if (kind === 'max-age' && !/^\d+$/.test(value)) {
+        throw new Error(`--max-age needs a day count, got: ${value}`);
+      }
       ops.push({ kind, value });
       continue;
     }
@@ -366,6 +399,8 @@ while \`-p 5 -l 5\` lists the next 5 after pruning.
 
   -l, --list NUM        list the NUM oldest entries
   -m, --match REGEX     scope all operations to URLs matching REGEX
+      --max-age DAYS    staleness guard: fail (exit 3) when the oldest
+                        non-manual entry is older than DAYS days
       --no-manual       scope list and summary to non-manual entries
   -p, --prune NUM[%]    drop the NUM (or NUM%) oldest non-manual entries, then
                         rewrite (manual entries retire via their expires date)
@@ -409,7 +444,7 @@ export function main(argv) {
 
   const now = Date.now() / 1000;
   const ops = args.ops.length ? args.ops : [{ kind: 'summary' }];
-  const { output, writeText } = runOps(parsed, ops, {
+  const { output, writeText, guardFailed } = runOps(parsed, ops, {
     now,
     path,
     match: args.match,
@@ -418,6 +453,7 @@ export function main(argv) {
 
   if (output) console.log(output);
   if (writeText !== null) writeFileAtomic(path, writeText);
+  if (guardFailed) process.exit(3);
 }
 
 // Real-path compare, not `file://${argv[1]}`: npm links bins as symlinks, so

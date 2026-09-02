@@ -254,19 +254,19 @@ test('runOps without a prune does not rewrite the file', () => {
 
 const A_BLOCK = `  // seed rationale
   "https://a.example/": {
-    "status": 206,
+    "result": 206,
     "when": "2000-08-05T01:46:40Z",
     "via": "manual",
   },
 `;
 const B_BLOCK = `  "https://b.example/": {
-    "status": 200,
+    "result": 200,
     "when": "2001-09-09T01:46:40Z",
     "via": "lychee",
   },
 `;
 const C_BLOCK = `  "https://c.example/": {
-    "status": 200,
+    "result": 200,
     "when": "2001-08-30T01:46:40Z",
     "via": "browser",
   },
@@ -422,6 +422,59 @@ test('no-manual never drops manual entries on a prune rewrite', () => {
     noManual: true,
   });
   assert.match(writeText, /a\.example/, 'manual seed survives the rewrite');
+});
+
+// --- --max-age staleness guard ---
+
+test('parseArgs accepts --max-age with a day count', () => {
+  const { ops } = parseArgs(['--max-age', '30']);
+  assert.deepEqual(ops, [{ kind: 'max-age', value: '30' }], 'op captured');
+  assert.throws(
+    () => parseArgs(['--max-age']),
+    /requires a value/,
+    'a bare flag is rejected',
+  );
+  assert.throws(
+    () => parseArgs(['--max-age', '30d']),
+    /--max-age needs a day count/,
+    'a non-numeric threshold is rejected',
+  );
+});
+
+test('max-age passes when the oldest checked entry is within the threshold', () => {
+  const parsed = parseOwnedCache(OWNED_SAMPLE);
+  // Oldest non-manual entry (c) is ~10 days old at NOW.
+  const { output, guardFailed } = runOps(
+    parsed,
+    [{ kind: 'max-age', value: '30' }],
+    { now: NOW },
+  );
+  assert.equal(guardFailed, false, 'guard passes');
+  assert.match(output, /oldest checked entry/, 'the guard reports its finding');
+});
+
+test('max-age fails when the oldest checked entry exceeds the threshold', () => {
+  // Manual seeds are exempt (their lifecycle is owned by expires), so the
+  // guard reads the oldest non-manual entry: a dead refresh lane shows up as
+  // lychee-owned entries aging past the threshold.
+  const parsed = parseOwnedCache(OWNED_SAMPLE);
+  const { output, guardFailed } = runOps(
+    parsed,
+    [{ kind: 'max-age', value: '5' }],
+    { now: NOW },
+  );
+  assert.equal(guardFailed, true, 'guard fails');
+  assert.match(output, /exceeds/, 'the failure names the threshold breach');
+  assert.match(output, /c\.example/, 'the failure names the oldest entry');
+});
+
+test('max-age passes on a cache with only manual entries', () => {
+  // No checked entries to age: nothing for a refresh lane to refresh.
+  const parsed = parseOwnedCache(`{\n${A_BLOCK}}\n`);
+  const { guardFailed } = runOps(parsed, [{ kind: 'max-age', value: '1' }], {
+    now: NOW,
+  });
+  assert.equal(guardFailed, false, 'guard passes with no checked entries');
 });
 
 // --- CLI entry point ---
