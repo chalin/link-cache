@@ -262,30 +262,53 @@ export function runOps(
       );
     } else if (op.kind === 'max-age') {
       // Staleness guard: with staleness checks off by default in
-      // lychee-norm-cache, a dead refresh lane rots the cache silently; the
-      // oldest checked (non-manual) entry aging past the threshold is the
-      // signal. Manual seeds are exempt — their lifecycle is owned by their
-      // expires date, and under prune-refresh rotation they keep their
-      // original timestamp, so they'd trip the guard mid-lifecycle.
-      const cur = current().filter((e) => e.via !== 'manual');
-      const oldest = selectOldest(cur, 1)[0];
-      if (!oldest) {
-        out.push('Staleness guard: no checked entries; nothing to age.');
+      // lychee-norm-cache, a dead refresh job rots the cache silently; an
+      // entry aging past the threshold is the signal. Refreshable entries are
+      // the lychee-owned ones (via-less legacy CSV entries included), aged by
+      // their check time, plus expired manual seeds, aged from their expiry
+      // date (a live refresh job replaces them within a rotation). Unexpired
+      // and no-expires seeds and named-resolver entries are exempt: their
+      // timestamps never refresh on re-confirmation, so their age says
+      // nothing about the refresh job.
+      const limit = Number(op.value);
+      if (parsed.malformed > 0) {
+        guardFailed = true;
+        out.push(
+          `Staleness guard: ${parsed.malformed} malformed line(s); the cache's age cannot be trusted.`,
+        );
       } else {
-        const ageDays = Math.floor((now - oldest.ts) / DAY);
-        const limit = Number(op.value);
-        if (ageDays > limit) {
+        const candidates = [];
+        for (const e of current()) {
+          if (e.via === undefined || e.via === 'lychee') {
+            candidates.push({ url: e.url, ts: e.ts });
+          } else if (e.via === 'manual' && e.src?.expires !== undefined) {
+            const cutoff = Date.parse(`${e.src.expires}T23:59:59Z`) / 1000;
+            if (now > cutoff) candidates.push({ url: e.url, ts: cutoff });
+          }
+        }
+        const oldest = candidates.sort((a, b) => a.ts - b.ts)[0];
+        if (!oldest) {
+          out.push('Staleness guard: no refreshable entries; nothing to age.');
+        } else if (oldest.ts > now) {
           guardFailed = true;
           out.push(
-            `Staleness guard: oldest checked entry is ${ageDays}d old, ` +
-              `exceeds --max-age ${limit}d:\n  ${displayUrl(oldest.url)}\n` +
-              'Is the cache-refresh lane running?',
+            `Staleness guard: future-dated timestamp on ${displayUrl(oldest.url)}; the cache's age cannot be trusted.`,
           );
         } else {
-          out.push(
-            `Staleness guard: oldest checked entry is ${ageDays}d old ` +
-              `(within --max-age ${limit}d).`,
-          );
+          const ageDays = Math.floor((now - oldest.ts) / DAY);
+          if (now - oldest.ts > limit * DAY) {
+            guardFailed = true;
+            out.push(
+              `Staleness guard: oldest refreshable entry is ${ageDays}d old, ` +
+                `exceeds --max-age ${limit}d:\n  ${displayUrl(oldest.url)}\n` +
+                'Is the cache-refresh job running?',
+            );
+          } else {
+            out.push(
+              `Staleness guard: oldest refreshable entry is ${ageDays}d old ` +
+                `(within --max-age ${limit}d).`,
+            );
+          }
         }
       }
     } else if (op.kind === 'summary') {
@@ -400,7 +423,7 @@ while \`-p 5 -l 5\` lists the next 5 after pruning.
   -l, --list NUM        list the NUM oldest entries
   -m, --match REGEX     scope all operations to URLs matching REGEX
       --max-age DAYS    staleness guard: fail (exit 3) when the oldest
-                        non-manual entry is older than DAYS days
+                        refreshable entry is older than DAYS days
       --no-manual       scope list and summary to non-manual entries
   -p, --prune NUM[%]    drop the NUM (or NUM%) oldest non-manual entries, then
                         rewrite (manual entries retire via their expires date)

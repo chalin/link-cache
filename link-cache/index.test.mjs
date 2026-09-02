@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync, symlinkSync } from 'node:fs';
+import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -426,6 +426,12 @@ test('no-manual never drops manual entries on a prune rewrite', () => {
 
 // --- --max-age staleness guard ---
 
+// Owned-entry block builders for guard fixtures.
+const when = (ts) => new Date(ts * 1000).toISOString().replace(/\.\d{3}Z$/, '');
+const block = (url, ts, via, expires) =>
+  `  ${JSON.stringify(url)}: {\n    "result": 200,\n    "when": "${when(ts)}Z",\n    "via": ${JSON.stringify(via)},\n${expires === undefined ? '' : `    "expires": ${JSON.stringify(expires)},\n`}  },\n`;
+const guardCache = (...blocks) => parseOwnedCache(`{\n${blocks.join('')}}\n`);
+
 test('parseArgs accepts --max-age with a day count', () => {
   const { ops } = parseArgs(['--max-age', '30']);
   assert.deepEqual(ops, [{ kind: 'max-age', value: '30' }], 'op captured');
@@ -441,23 +447,28 @@ test('parseArgs accepts --max-age with a day count', () => {
   );
 });
 
-test('max-age passes when the oldest checked entry is within the threshold', () => {
-  const parsed = parseOwnedCache(OWNED_SAMPLE);
-  // Oldest non-manual entry (c) is ~10 days old at NOW.
+test('max-age passes when the oldest refreshable entry is within the threshold', () => {
+  const parsed = guardCache(
+    block('https://a.example/', NOW - 10 * DAY, 'lychee'),
+  );
   const { output, guardFailed } = runOps(
     parsed,
     [{ kind: 'max-age', value: '30' }],
     { now: NOW },
   );
   assert.equal(guardFailed, false, 'guard passes');
-  assert.match(output, /oldest checked entry/, 'the guard reports its finding');
+  assert.match(
+    output,
+    /oldest refreshable entry/,
+    'the guard reports its finding',
+  );
 });
 
-test('max-age fails when the oldest checked entry exceeds the threshold', () => {
-  // Manual seeds are exempt (their lifecycle is owned by expires), so the
-  // guard reads the oldest non-manual entry: a dead refresh lane shows up as
-  // lychee-owned entries aging past the threshold.
-  const parsed = parseOwnedCache(OWNED_SAMPLE);
+test('max-age fails when the oldest refreshable entry exceeds the threshold', () => {
+  const parsed = guardCache(
+    block('https://fresh.example/', NOW, 'lychee'),
+    block('https://old.example/', NOW - 10 * DAY, 'lychee'),
+  );
   const { output, guardFailed } = runOps(
     parsed,
     [{ kind: 'max-age', value: '5' }],
@@ -465,16 +476,112 @@ test('max-age fails when the oldest checked entry exceeds the threshold', () => 
   );
   assert.equal(guardFailed, true, 'guard fails');
   assert.match(output, /exceeds/, 'the failure names the threshold breach');
-  assert.match(output, /c\.example/, 'the failure names the oldest entry');
+  assert.match(output, /old\.example/, 'the failure names the oldest entry');
 });
 
-test('max-age passes on a cache with only manual entries', () => {
-  // No checked entries to age: nothing for a refresh lane to refresh.
-  const parsed = parseOwnedCache(`{\n${A_BLOCK}}\n`);
-  const { guardFailed } = runOps(parsed, [{ kind: 'max-age', value: '1' }], {
+test('max-age exempts named-resolver entries', () => {
+  // A named resolver's ts never refreshes on re-confirmation (mergeBack leaves
+  // provenance-bearing entries untouched), so counting it would trip the guard
+  // forever on a healthy refresh job.
+  const parsed = guardCache(
+    block('https://probe.example/', NOW - 400 * DAY, 'browser'),
+    block('https://ok.example/', NOW, 'lychee'),
+  );
+  const { guardFailed } = runOps(parsed, [{ kind: 'max-age', value: '5' }], {
     now: NOW,
   });
-  assert.equal(guardFailed, false, 'guard passes with no checked entries');
+  assert.equal(guardFailed, false, 'named-resolver age is not lane evidence');
+});
+
+test('max-age counts an expired manual seed from its expiry date', () => {
+  // A live refresh job replaces an expired seed within a rotation, so a
+  // long-expired seed is rot evidence, aged from its expiry rather than its
+  // ts. Seed ts ~400d ago, expiry ~251d ago (2001-01-01 vs NOW = 2001-09-09).
+  const parsed = guardCache(
+    block('https://seed.example/', NOW - 400 * DAY, 'manual', '2001-01-01'),
+  );
+  const failed = runOps(parsed, [{ kind: 'max-age', value: '100' }], {
+    now: NOW,
+  });
+  assert.equal(failed.guardFailed, true, 'a long-expired seed trips the guard');
+  assert.match(failed.output, /seed\.example/, 'the seed is named');
+  const passed = runOps(parsed, [{ kind: 'max-age', value: '300' }], {
+    now: NOW,
+  });
+  assert.equal(
+    passed.guardFailed,
+    false,
+    'age counts from expiry (251d), not from the seed ts (400d)',
+  );
+});
+
+test('max-age exempts unexpired and no-expires manual seeds', () => {
+  const parsed = guardCache(
+    block('https://noexp.example/', NOW - 400 * DAY, 'manual'),
+    block('https://fresh.example/', NOW - 400 * DAY, 'manual', '2002-01-01'),
+  );
+  const { output, guardFailed } = runOps(
+    parsed,
+    [{ kind: 'max-age', value: '1' }],
+    { now: NOW },
+  );
+  assert.equal(guardFailed, false, 'guard passes with no refreshable entries');
+  assert.match(output, /no refreshable entries/, 'the guard says why');
+});
+
+test('max-age fails on malformed cache lines', () => {
+  // Malformed lines mean the age evidence can't be trusted; passing would be
+  // a false-clean on exactly the kind of file the guard exists to catch.
+  const parsed = parseCache('garbage\n');
+  const { output, guardFailed } = runOps(
+    parsed,
+    [{ kind: 'max-age', value: '1' }],
+    { now: NOW },
+  );
+  assert.equal(guardFailed, true, 'malformed input fails the guard');
+  assert.match(output, /malformed/, 'the failure names the cause');
+});
+
+test('max-age fails on a future-dated entry', () => {
+  const parsed = guardCache(
+    block('https://future.example/', NOW + 400 * DAY, 'lychee'),
+  );
+  const { output, guardFailed } = runOps(
+    parsed,
+    [{ kind: 'max-age', value: '1' }],
+    { now: NOW },
+  );
+  assert.equal(guardFailed, true, 'future timestamps fail the guard');
+  assert.match(output, /future/, 'the failure names the cause');
+});
+
+test('max-age compares real elapsed time, not floored days', () => {
+  // Flooring the age would let a 60.04d entry pass --max-age 60.
+  const parsed = guardCache(
+    block('https://a.example/', NOW - 60 * DAY - 3600, 'lychee'),
+  );
+  const over = runOps(parsed, [{ kind: 'max-age', value: '60' }], { now: NOW });
+  assert.equal(over.guardFailed, true, '60d + 1h exceeds 60d');
+  const under = guardCache(
+    block('https://a.example/', NOW - 60 * DAY + 3600, 'lychee'),
+  );
+  const ok = runOps(under, [{ kind: 'max-age', value: '60' }], { now: NOW });
+  assert.equal(ok.guardFailed, false, '60d - 1h is within 60d');
+});
+
+test('a breached guard exits 3', () => {
+  const script = fileURLToPath(new URL('./index.mjs', import.meta.url));
+  const dir = mkdtempSync(join(tmpdir(), 'link-cache-'));
+  const file = join(dir, '.lycheecache');
+  try {
+    writeFileSync(file, `https://a.example/,200,1\n`);
+    const r = spawnSync(process.execPath, [script, file, '--max-age', '30'], {
+      encoding: 'utf8',
+    });
+    assert.equal(r.status, 3, 'the guard verdict is its own exit code');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 // --- CLI entry point ---

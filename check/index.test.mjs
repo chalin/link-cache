@@ -9,6 +9,7 @@ import {
   chmodSync,
   mkdirSync,
   mkdtempSync,
+  existsSync,
   readFileSync,
   rmSync,
   symlinkSync,
@@ -538,11 +539,13 @@ const OWNED_WITH_SEED = `{
 `;
 
 test(
-  'a preflight failure leaves both caches untouched',
+  'a preflight failure leaves the owned cache untouched and clears the derived CSV',
   { skip: WIN_SKIP },
   () => {
     // Expired entries are omitted from the projection, so folding a run that
-    // never happened would mislabel them as failed.
+    // never happened would mislabel them as failed. The derived CSV is
+    // removed: it carries the projection's fresh timestamps, a lie about
+    // recency once no run consumed it.
     const site = makeSite({ stdout: 'error: bad usage', exit: 2 });
     writeFileSync(join(site, 'link-cache.jsonc'), OWNED_WITH_EXPIRED);
     try {
@@ -552,6 +555,11 @@ test(
         readFileSync(join(site, 'link-cache.jsonc'), 'utf8'),
         OWNED_WITH_EXPIRED,
         'the owned cache is byte-identical after a preflight failure',
+      );
+      assert.equal(
+        existsSync(join(site, '.lycheecache')),
+        false,
+        'the derived CSV is cleared',
       );
     } finally {
       rmSync(site, { recursive: true, force: true });
@@ -880,6 +888,30 @@ test('--migrate fails without writing when the CSV has malformed lines', () => {
     assert.match(r.stderr, /malformed/, 'the error names the cause');
     assert.throws(
       () => readFileSync(join(site, 'link-cache.jsonc')),
+      'nothing is written on refusal',
+    );
+  } finally {
+    rmSync(site, { recursive: true, force: true });
+  }
+});
+
+test('--migrate fails without writing when a status has no result mapping', () => {
+  // A lexically well-formed CSV row can still carry a status outside the
+  // result domain (0, sub-100, 1000+); writing it would produce a file the
+  // parser itself rejects.
+  const script = fileURLToPath(new URL('./index.mjs', import.meta.url));
+  const site = mkdtempSync(join(tmpdir(), 'lnc-'));
+  try {
+    writeFileSync(join(site, '.lycheecache'), 'https://a.example/,0,100\n');
+    const r = spawnSync(process.execPath, [script, '--migrate'], {
+      cwd: site,
+      encoding: 'utf8',
+    });
+    assert.equal(r.status, 2, 'unmappable migration is refused');
+    assert.match(r.stderr, /unmappable/, 'the error names the cause');
+    assert.equal(
+      existsSync(join(site, 'link-cache.jsonc')),
+      false,
       'nothing is written on refusal',
     );
   } finally {

@@ -11,7 +11,13 @@
 // or public/ missing, zero links checked, lychee config error).
 
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
+import {
+  existsSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  statSync,
+} from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -44,11 +50,12 @@ run and folded back into it afterwards; otherwise ${CSV_FILE} is normalized in
 place (legacy mode). Bridges a GitHub token from the gh CLI when GITHUB_TOKEN
 isn't set; extra arguments pass through to lychee.
 
-By default staleness checks are not applied: every cached entry projects with
-a fresh timestamp, so a run verifies only URLs not in the cache. With
+By default staleness checks are not applied: cached HTTP results project with
+fresh timestamps, so a run verifies only URLs without a cached HTTP result
+(recorded failures never project and re-check on every run). With
 --check-stale, real timestamps project, so lychee's max_cache_age and manual
-expires dates bite and stale entries are re-verified (the refresh lane's
-mode).
+expires dates apply and stale entries are re-verified (the scheduled
+cache-refresh job's mode).
 
   --check-stale  apply staleness checks (re-verify stale and expired entries)
   --migrate      convert an existing ${CSV_FILE} to ${OWNED_FILE} and exit
@@ -229,13 +236,18 @@ function migrate(cwd) {
   const ownedPath = path.join(cwd, OWNED_FILE);
   if (existsSync(ownedPath)) return fail(`${OWNED_FILE} already exists.`);
   if (!existsSync(csvPath)) return fail(`${CSV_FILE} not found.`);
-  const { text, count, malformed } = migrateCsvText(
+  const { text, count, malformed, unmappable } = migrateCsvText(
     readFileSync(csvPath, 'utf8'),
   );
   // Migration is specified lossless: refuse rather than silently drop.
   if (malformed) {
     return fail(
       `${CSV_FILE} has ${malformed} malformed line(s); fix or remove them, then rerun.`,
+    );
+  }
+  if (unmappable) {
+    return fail(
+      `${CSV_FILE} has ${unmappable} entr${unmappable === 1 ? 'y' : 'ies'} with an unmappable status (no result equivalent); fix or remove them, then rerun.`,
     );
   }
   writeFileAtomic(ownedPath, text);
@@ -316,16 +328,26 @@ function main(argv) {
     },
   );
   if (run.stdout) process.stdout.write(run.stdout);
+
+  // A failed or verdict-free run never folds; remove the derived CSV rather
+  // than leave it behind (the projection's fresh timestamps are a lie about
+  // recency once no completed run consumed them).
+  const bail = (message) => {
+    if (owned) rmSync(cachePath, { force: true });
+    return fail(message);
+  };
+
   if (run.error) {
-    return fail(`lychee failed to run: ${run.error.message}`);
+    return bail(`lychee failed to run: ${run.error.message}`);
   }
   const summary = parseSummary(run.stdout ?? '');
   const status = mapLycheeExit(run.status ?? 1, summary);
 
-  // On a preflight failure lychee produced no trustworthy results: leave both
-  // caches untouched (folding would mislabel unprojected entries as failed).
+  // On a preflight failure lychee produced no trustworthy results: leave the
+  // owned cache untouched (folding would mislabel unprojected entries as
+  // failed).
   if (status === EXIT_PREFLIGHT) {
-    return fail('lychee did not complete a check; caches left untouched.');
+    return bail('lychee did not complete a check; owned cache left untouched.');
   }
 
   // A clean run in which nothing got a verdict is a false-clean (empty or
@@ -333,7 +355,7 @@ function main(argv) {
   // unattempted entries as failed, so the check precedes the fold. Cache hits
   // count toward OK in lychee's summary, so a fully-cached run passes.
   if (status === EXIT_OK && summary && summary.ok + summary.errors === 0) {
-    return fail('lychee verified 0 links: empty or fully-excluded public/?');
+    return bail('lychee verified 0 links: empty or fully-excluded public/?');
   }
 
   // Fold the post-run CSV back into the owned cache (also on dead links, so a
