@@ -141,19 +141,35 @@ export function mapLycheeExit(code, summary) {
 // prints accepted URLs the same way ("[200] URL (at 1:1)",
 // "[200] URL | OK (cached)"), so a numeric tag counts only with a failure
 // remark. Word tags count except known non-failure states (EXCLUDED,
-// UNSUPPORTED, etc.).
-const NON_FAILURE_TAGS = new Set(['OK', 'CACHED', 'EXCLUDED', 'UNSUPPORTED']);
+// UNSUPPORTED, …) and log levels ([INFO]/[WARN] lines carry prose, not URLs);
+// since a recorded failure becomes a cache entry, the URL token must also
+// look like one (scheme://) — lychee only checks absolute URLs.
+const NON_FAILURE_TAGS = new Set([
+  'OK',
+  'CACHED',
+  'EXCLUDED',
+  'UNSUPPORTED',
+  'INFO',
+  'WARN',
+  'DEBUG',
+  'TRACE',
+]);
 export function parseFailedUrls(stdout) {
   stdout = stripAnsi(stdout);
   const failed = new Set();
   const trimmed = stdout.trim();
   if (trimmed.startsWith('{')) {
+    // --format json, possibly with a trailing human "Hint:" line after the
+    // document. Failures live in error_map/timeout_map (0.24's shape);
+    // fail_map covers older lychee.
     try {
-      const failMap = JSON.parse(trimmed).fail_map ?? {};
-      for (const failures of Object.values(failMap)) {
-        for (const f of failures) {
-          const url = typeof f.url === 'string' ? f.url : f.url?.url;
-          if (url) failed.add(url);
+      const json = JSON.parse(trimmed.slice(0, trimmed.lastIndexOf('}') + 1));
+      for (const map of [json.fail_map, json.error_map, json.timeout_map]) {
+        for (const failures of Object.values(map ?? {})) {
+          for (const f of failures) {
+            const url = typeof f.url === 'string' ? f.url : f.url?.url;
+            if (url) failed.add(url);
+          }
         }
       }
       return failed;
@@ -163,6 +179,7 @@ export function parseFailedUrls(stdout) {
   }
   for (const m of stdout.matchAll(/^\s*\[(\w+)\]\s+(\S+)(.*)$/gm)) {
     const [, tag, url, rest] = m;
+    if (!/^\w[\w+.-]*:\/\//.test(url)) continue;
     if (/^\d+$/.test(tag)) {
       if (/\|\s*(Rejected|Failed|Error \(cached\))/.test(rest)) failed.add(url);
     } else if (!NON_FAILURE_TAGS.has(tag.toUpperCase())) {

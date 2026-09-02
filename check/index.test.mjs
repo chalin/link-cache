@@ -352,6 +352,53 @@ test('parsers see through ANSI color codes', () => {
   );
 });
 
+test('parseFailedUrls ignores log-level lines', () => {
+  // lychee's own log lines are bracket-tagged too ([INFO] cache notices,
+  // [WARN] cache-load errors — both captured live from 0.24.2); their second
+  // token is prose, not a URL, and must never become a cache entry.
+  const out = [
+    '  [INFO] Cache is recent (age: 0s, max age: 1d 0h 0m 0s). Using.',
+    '  [WARN] Error while loading cache: CSV deserialize error. Continuing without.',
+    '[404] https://dead.example/ (at 1:1) | Rejected status code: 404 Not Found',
+    '🔍 1 Total (in 1s) 🔗 1 Unique ✅ 0 OK 🚫 1 Error',
+  ].join('\n');
+  assert.deepEqual(
+    [...parseFailedUrls(out)],
+    ['https://dead.example/'],
+    'log lines contribute nothing',
+  );
+});
+
+test('parseFailedUrls reads --format json error and timeout maps', () => {
+  // Real lychee 0.24.2 --format json shape (verified live): failures live in
+  // error_map/timeout_map keyed by input source, and a human "Hint:" line can
+  // trail the JSON document.
+  const out =
+    JSON.stringify({
+      total: 3,
+      successful: 1,
+      errors: 2,
+      error_map: {
+        'u.txt': [
+          {
+            url: 'https://dead.example/',
+            status: { text: 'Rejected status code: 404 Not Found', code: 404 },
+          },
+        ],
+      },
+      timeout_map: {
+        'u.txt': [
+          { url: 'https://slow.example/', status: { text: 'Timeout' } },
+        ],
+      },
+    }) + '\nHint: You can configure accepted/rejected response codes with `-a`';
+  assert.deepEqual(
+    [...parseFailedUrls(out)].sort(),
+    ['https://dead.example/', 'https://slow.example/'],
+    'error_map and timeout_map URLs extracted despite the trailing hint',
+  );
+});
+
 test('parseFailedUrls reads --format json fail_map', () => {
   const out = JSON.stringify({
     total: 2,
@@ -623,6 +670,38 @@ test(
       const owned = readFileSync(join(site, 'link-cache.jsonc'), 'utf8');
       assert.match(owned, /"status": -40/, 'the failure is recorded');
       assert.match(owned, /\/\/ range seed/, 'the rationale comment is kept');
+    } finally {
+      rmSync(site, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
+  'a failure new to the cache becomes a tool-error entry',
+  { skip: WIN_SKIP },
+  () => {
+    // Empty owned cache, empty post-run CSV (failures are cache-excluded), a
+    // real status-bracket failure line: the run's own report is the only
+    // evidence, and it must still land in the owned cache.
+    const site = makeSite({
+      stdout: [
+        '[404] https://new-dead.example/ (at 1:1) | Rejected status code: 404 Not Found',
+        '🔍 1 Total (in 1s) 🔗 1 Unique ✅ 0 OK 🚫 1 Error',
+      ].join('\n'),
+      exit: 2,
+      csvAfterRun: '',
+    });
+    writeFileSync(join(site, 'link-cache.jsonc'), '{}\n');
+    try {
+      const r = runWrapper(site);
+      assert.equal(r.status, 1, 'a completed run with failures exits 1');
+      const owned = readFileSync(join(site, 'link-cache.jsonc'), 'utf8');
+      assert.match(
+        owned,
+        /"https:\/\/new-dead\.example\/"/,
+        'the URL is keyed',
+      );
+      assert.match(owned, /"status": -40/, 'the failure is recorded');
     } finally {
       rmSync(site, { recursive: true, force: true });
     }
