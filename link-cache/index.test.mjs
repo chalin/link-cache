@@ -391,6 +391,39 @@ test('match tests the unquoted URL on the legacy CSV path', () => {
   assert.match(output, /a\.example\/x,y/, 'anchored regex matches a comma URL');
 });
 
+// --- --no-manual scoping ---
+
+test('parseArgs accepts --no-manual', () => {
+  assert.equal(parseArgs(['--no-manual']).noManual, true, 'flag captured');
+  assert.equal(parseArgs([]).noManual, false, 'defaults to false');
+  assert.throws(
+    () => parseArgs(['--no-manual', '--no-manual']),
+    /repeated flag/,
+    'repeat rejected',
+  );
+});
+
+test('no-manual scopes list and summary to non-manual entries', () => {
+  const parsed = parseOwnedCache(OWNED_SAMPLE);
+  const { output } = runOps(
+    parsed,
+    [{ kind: 'list', value: '5' }, { kind: 'summary' }],
+    { now: NOW, noManual: true },
+  );
+  assert.ok(!output.includes('a.example'), 'manual seed excluded from list');
+  assert.match(output, /b\.example/, 'non-manual entries listed');
+  assert.match(output, /Entries: 2/, 'summary counts non-manual only');
+});
+
+test('no-manual never drops manual entries on a prune rewrite', () => {
+  const parsed = parseOwnedCache(OWNED_SAMPLE);
+  const { writeText } = runOps(parsed, [{ kind: 'prune', value: '1' }], {
+    now: NOW,
+    noManual: true,
+  });
+  assert.match(writeText, /a\.example/, 'manual seed survives the rewrite');
+});
+
 // --- CLI entry point ---
 
 test(

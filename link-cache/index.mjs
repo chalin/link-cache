@@ -229,14 +229,16 @@ export function formatStats(stats, { now = Date.now() / 1000, path } = {}) {
 export function runOps(
   parsed,
   ops,
-  { now = Date.now() / 1000, path, match = null } = {},
+  { now = Date.now() / 1000, path, match = null, noManual = false } = {},
 ) {
   const removed = new Set();
   let pruned = 0;
   const out = [];
   // Match against the unquoted URL: legacy-CSV entries carry the raw
   // (possibly CSV-quoted) field, which would defeat anchored regexes.
-  const inScope = (e) => (match ? match.test(displayUrl(e.url)) : true);
+  const inScope = (e) =>
+    (match ? match.test(displayUrl(e.url)) : true) &&
+    (noManual ? e.via !== 'manual' : true);
   const current = () =>
     parsed.entries.filter((e) => !removed.has(e.index) && inScope(e));
 
@@ -304,12 +306,18 @@ export function parseArgs(argv) {
   const seen = new Set();
   let path = null;
   let match = null;
+  let noManual = false;
   let help = false;
 
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '-h' || a === '--help') {
       help = true;
+      continue;
+    }
+    if (a === '--no-manual') {
+      if (noManual) throw new Error(`repeated flag: ${a}`);
+      noManual = true;
       continue;
     }
     const kind = FLAGS.get(a);
@@ -344,7 +352,7 @@ export function parseArgs(argv) {
     path = a;
   }
 
-  return { ops, path, match, help };
+  return { ops, path, match, noManual, help };
 }
 
 const USAGE = `Usage: link-cache [CACHE_FILE] [options]
@@ -356,6 +364,7 @@ while \`-p 5 -l 5\` lists the next 5 after pruning.
 
   -l, --list NUM        list the NUM oldest entries
   -m, --match REGEX     scope all operations to URLs matching REGEX
+      --no-manual       scope list and summary to non-manual entries
   -p, --prune NUM[%]    drop the NUM (or NUM%) oldest non-manual entries, then
                         rewrite (manual entries retire via their expires date)
   -s, --summary         print a summary (counts, ages, status, via, histogram)
@@ -402,6 +411,7 @@ export function main(argv) {
     now,
     path,
     match: args.match,
+    noManual: args.noManual,
   });
 
   if (output) console.log(output);
