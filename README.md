@@ -56,11 +56,11 @@ Each entry records:
   chronological.
 - **`via`** — the resolver that set the status: `lychee`, `manual`
   (hand-seeded), or a named specialized resolver (e.g. a browser-grade probe).
-  Key hand-seeded entries by the URL exactly as lychee prints it (normalized:
-  lowercase host, no default port, resolved dot segments, and a `/` path on bare
-  hosts — `https://example.com/`, never `https://example.com`) — results merge
-  back by byte-for-byte key comparison, so a non-canonical spelling never
-  matches its re-check.
+  Key hand-seeded entries by the URL exactly as lychee prints it: lowercase
+  host, no default port, resolved dot segments, and a `/` path on bare hosts
+  (`https://example.com/`, never `https://example.com`). Results merge back by
+  byte-for-byte key comparison, so a non-canonical spelling never matches its
+  re-check.
 - **`expires`** (optional, `manual` entries) — `YYYY-MM-DD`. Until then the
   entry is trusted (never re-checked, overriding lychee's `max_cache_age`);
   after that, it's re-checked live and replaced by the verified result.
@@ -76,7 +76,7 @@ status; an entry that merely goes missing from lychee's CSV is left untouched
 (cache-status excludes, cache aging, and site changes all remove entries from
 healthy runs). Failure evidence only counts on a dead-links exit (a green
 `--accept-timeouts` run may still print `[TIMEOUT]` lines), and new failure
-entries mint for http(s) URLs only — `file://` and `mailto:` never round-trip
+entries mint for http(s) URLs only: `file://` and `mailto:` never round-trip
 through lychee's cache, so a recorded failure could never heal.
 
 Without a `link-cache.jsonc`, `lychee-norm-cache` falls back to the legacy mode:

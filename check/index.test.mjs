@@ -304,8 +304,7 @@ test('parseFailedUrls reads status-bracket rejection lines', () => {
 test('parseFailedUrls ignores non-failure word tags', () => {
   // Captured live from lychee 0.24.2: unsupported URLs print [IGNORED] on an
   // otherwise green run (exit 0, "0 Errors"), and unknown mail statuses print
-  // [UNKNOWN]; neither is in lychee's is_error set. Recording them would mint
-  // committed -40 entries that never heal (status <= 0 never projects).
+  // [UNKNOWN]; neither is in lychee's is_error set.
   const out = [
     '[IGNORED] slack://open?team=T123 (at 1:1) | Unsupported: Failed to create HTTP request client: builder error for url (slack://open?team=T123)',
     '[UNKNOWN] mailto:user@example.com | Unknown mail status',
@@ -322,7 +321,7 @@ test('parseFailedUrls ignores non-failure word tags', () => {
 
 test('parseFailedUrls captures mailto failures', () => {
   // Captured live (--include-mail): a failing mail address prints [ERROR]
-  // with a mailto: URL — absolute but scheme://-less — and counts in Errors.
+  // with a mailto: URL (absolute but scheme://-less) and counts in Errors.
   const out = [
     '[ERROR] mailto:nobody@dead.example (at 1:8) | No MX records found for domain',
     '🔍 1 Total (in 1s) 🔗 1 Unique ✅ 0 OK 🚫 1 Error',
@@ -367,10 +366,8 @@ test('parseFailedUrls treats cached errors as failures', () => {
 });
 
 test('parsers see through ANSI color codes', () => {
-  // CLICOLOR_FORCE=1 in the caller's env propagates to lychee and wraps tags
-  // in SGR codes even on a piped stdout (captured live from lychee 0.24.2);
-  // the summary regex tolerates the codes, so without stripping, failures
-  // would vanish silently.
+  // Fixture captured live from lychee 0.24.2 under CLICOLOR_FORCE=1; the
+  // stripping rationale lives with stripAnsi.
   const out = [
     '\x1b[38;5;197m\x1b[1mIssues found in 1 input. Find details below.',
     '',
@@ -393,8 +390,8 @@ test('parsers see through ANSI color codes', () => {
 
 test('parseFailedUrls ignores log-level lines', () => {
   // lychee's own log lines are bracket-tagged too ([INFO] cache notices,
-  // [WARN] cache-load errors — both captured live from 0.24.2); their second
-  // token is prose, not a URL, and must never become a cache entry.
+  // [WARN] cache-load errors, both captured live from 0.24.2); their second
+  // token is prose, not a URL.
   const out = [
     '  [INFO] Cache is recent (age: 0s, max age: 1d 0h 0m 0s). Using.',
     '  [WARN] Error while loading cache: CSV deserialize error. Continuing without.',
@@ -722,8 +719,7 @@ test(
     // Empty owned cache, empty post-run CSV (failures are cache-excluded),
     // real status-bracket failure lines: the run's own report is the only
     // evidence, and it must still land in the owned cache. Two failing URLs
-    // prove the stub emits real newlines (a flattened stdout would hide the
-    // second line from the anchored line scan).
+    // guard against a flattened stub stdout (see makeSite).
     const site = makeSite({
       stdout: [
         '[404] https://new-dead.example/ (at 1:1) | Rejected status code: 404 Not Found',
@@ -759,10 +755,9 @@ test(
   'a green run records no failures despite failure-shaped lines',
   { skip: WIN_SKIP },
   () => {
-    // --accept-timeouts runs print "[TIMEOUT] URL | Request timed out" while
-    // exiting 0 with "0 Errors" (captured live from lychee 0.24.2): the user
-    // declared those non-failures, so recording them would mint -40 entries —
-    // and refresh their ts — on every clean run.
+    // Captured live from lychee 0.24.2: --accept-timeouts runs print
+    // "[TIMEOUT] URL | Request timed out" while exiting 0 with "0 Errors";
+    // the gating rationale lives with the wrapper's failure-evidence gate.
     const site = makeSite({
       stdout: [
         '[TIMEOUT] http://10.255.255.1/ (at 1:1) | Request timed out',

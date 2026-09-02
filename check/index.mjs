@@ -92,8 +92,8 @@ export function publicDirOf(cwd) {
   return publicDir;
 }
 
-// lychee colors its output when CLICOLOR_FORCE is set — even onto the piped
-// stdout we capture, since the spawn env passes process.env through — and SGR
+// lychee colors its output when CLICOLOR_FORCE is set (even onto the piped
+// stdout we capture, since the spawn env passes process.env through), and SGR
 // codes around the tags defeat the line parsers (captured live from 0.24.2),
 // so failures would vanish silently. Strip before parsing.
 function stripAnsi(s) {
@@ -129,7 +129,7 @@ export function mapLycheeExit(code, summary) {
   return EXIT_PREFLIGHT;
 }
 
-// URLs the run itself reported as failing — the human per-URL lines, or
+// URLs the run itself reported as failing: the human per-URL lines, or
 // --format json's fail_map. Positive per-URL evidence for the merge-back's
 // failure recording; CSV absence alone proves nothing (cache_exclude_status,
 // max_cache_age, and site changes all remove entries from healthy runs).
@@ -139,13 +139,13 @@ export function mapLycheeExit(code, summary) {
 // TIMEOUT, or a numeric status tag with a failure remark ("[403] URL … |
 // Rejected status code: 403 Forbidden", "[404] URL | Error (cached)").
 // Numeric tags alone are not failures: -vv prints accepted URLs the same way
-// ("[200] URL (at 1:1)", "[200] URL | OK (cached)"). The other word tags are
-// non-failures — EXCLUDED, IGNORED (unsupported URL, printed on green runs),
-// UNKNOWN (mail; not in lychee's is_error) — as are its log-level lines
-// ([INFO], [WARN], …), so word tags are whitelisted, not blacklisted: a
+// ("[200] URL (at 1:1)", "[200] URL | OK (cached)"). Word tags are
+// whitelisted, not blacklisted: the others (EXCLUDED; IGNORED, unsupported
+// URLs printed on green runs; UNKNOWN, mail outside lychee's is_error) are
+// non-failures, as are lychee's log-level lines ([INFO], [WARN], …), and a
 // recorded failure becomes a committed cache entry that never heals (status
 // <= 0 never projects), making a false positive costlier than a false
-// negative. For the same reason the URL token must look like a URL — absolute
+// negative. For the same reason the URL token must look like a URL: absolute
 // with scheme:// or mailto: (the one scheme://-less form lychee checks).
 const FAILURE_TAGS = new Set(['ERROR', 'TIMEOUT']);
 const URL_SHAPE = /^(\w[\w+.-]*:\/\/|mailto:)/;
@@ -318,8 +318,8 @@ function main(argv) {
       ? parseCsv(readFileSync(cachePath, 'utf8')).entries
       : [];
     // Failure evidence counts only on a dead-links exit: a green run means
-    // lychee accepted everything it printed — --accept-timeouts runs print
-    // "[TIMEOUT] URL …" lines while exiting 0 — so recording those would mint
+    // lychee accepted everything it printed (--accept-timeouts runs print
+    // "[TIMEOUT] URL …" lines while exiting 0), so recording those would mint
     // and churn -40 entries on every clean run.
     const failedUrls =
       status === EXIT_DEAD_LINKS
