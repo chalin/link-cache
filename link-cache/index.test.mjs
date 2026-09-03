@@ -108,6 +108,20 @@ test('parseCache reads url, status and timestamp from a quoted URL', () => {
   assert.match(p.entries[0].url, /x\.example/, 'url is the quoted head');
 });
 
+test('parseCache rejects empty-URL and non-numeric rows as malformed', () => {
+  // The lenient 0.4.x parser accepted these as entries; the guard then
+  // trusted junk age evidence.
+  const { entries, malformed } = parseCache(
+    ',200,123\nhttps://a.example/,foo,123\nhttps://b.example/,200,bad\n"https://c.example/,200,123\nhttps://ok.example/,200,123\n',
+  );
+  assert.equal(malformed, 4, 'junk rows count as malformed');
+  assert.deepEqual(
+    entries.map((e) => e.url),
+    ['https://ok.example/'],
+    'only the well-formed row parses',
+  );
+});
+
 // --- resolvePruneCount ---
 
 test('resolvePruneCount reads an absolute count', () => {
@@ -581,6 +595,22 @@ test('max-age ignores --no-manual scoping', () => {
     noManual: true,
   });
   assert.equal(guardFailed, true, 'the expired seed still trips the guard');
+});
+
+test('max-age fails on a future-dated entry even when not the oldest', () => {
+  // A single oldest-entry probe would let any past entry mask a future one;
+  // corrupt evidence anywhere in the candidate set is untrustworthy.
+  const parsed = guardCache(
+    block('https://cur.example/', NOW - 3600, 'lychee'),
+    block('https://future.example/', NOW + 400 * DAY, 'lychee'),
+  );
+  const { output, guardFailed } = runOps(
+    parsed,
+    [{ kind: 'max-age', value: '30' }],
+    { now: NOW },
+  );
+  assert.equal(guardFailed, true, 'a masked future timestamp fails the guard');
+  assert.match(output, /future\.example/, 'the failure names the entry');
 });
 
 test('a breached guard exits 3', () => {

@@ -23,17 +23,21 @@ const BUCKET_COUNT = 5;
 
 // --- parsing ---------------------------------------------------------------
 
+// Parse one URL,STATUS,TIMESTAMP line; null when malformed. Lexically strict,
+// matching lib/cache.mjs's parseCsvLine: junk rows must count as malformed
+// (the staleness guard fails on them) rather than pass as entries.
 function parseLine(raw) {
   const lastComma = raw.lastIndexOf(',');
   if (lastComma < 0) return null;
-  const ts = Number(raw.slice(lastComma + 1));
+  const tsField = raw.slice(lastComma + 1);
   const head = raw.slice(0, lastComma);
   const statusComma = head.lastIndexOf(',');
   if (statusComma < 0) return null;
   const status = head.slice(statusComma + 1).trim();
   const url = head.slice(0, statusComma);
-  if (!Number.isInteger(ts) || status === '') return null;
-  return { url, status, ts };
+  if (!/^\d+$/.test(tsField) || !/^-?\d+$/.test(status)) return null;
+  if (url === '' || url.startsWith('"') !== url.endsWith('"')) return null;
+  return { url, status, ts: Number(tsField) };
 }
 
 // Parse a whole CSV cache, keeping the original lines (so a prune can rewrite
@@ -197,7 +201,7 @@ export function formatStats(stats, { now = Date.now() / 1000, path } = {}) {
     );
   }
 
-  lines.push('  Status:');
+  lines.push('  Result:');
   for (const [status, n] of stats.byStatus) {
     lines.push(`    ${status.padEnd(5)} ${n}`);
   }
@@ -293,14 +297,18 @@ export function runOps(
             if (now > cutoff) candidates.push({ url: e.url, ts: cutoff });
           }
         }
+        // Corrupt evidence anywhere in the candidate set poisons the verdict:
+        // a single oldest-entry probe would let any past entry mask a
+        // future-dated one.
+        const future = candidates.find((c) => c.ts > now);
         const oldest = candidates.sort((a, b) => a.ts - b.ts)[0];
-        if (!oldest) {
-          out.push('Staleness guard: no refreshable entries; nothing to age.');
-        } else if (oldest.ts > now) {
+        if (future) {
           guardFailed = true;
           out.push(
-            `Staleness guard: future-dated timestamp on ${displayUrl(oldest.url)}; the cache's age cannot be trusted.`,
+            `Staleness guard: future-dated timestamp on ${displayUrl(future.url)}; the cache's age cannot be trusted.`,
           );
+        } else if (!oldest) {
+          out.push('Staleness guard: no refreshable entries; nothing to age.');
         } else {
           const ageDays = Math.floor((now - oldest.ts) / DAY);
           if (now - oldest.ts > limit * DAY) {
@@ -434,7 +442,7 @@ while \`-p 5 -l 5\` lists the next 5 after pruning.
       --no-manual       scope list and summary to non-manual entries
   -p, --prune NUM[%]    drop the NUM (or NUM%) oldest non-manual entries, then
                         rewrite (manual entries retire via their expires date)
-  -s, --summary         print a summary (counts, ages, status, via, histogram)
+  -s, --summary         print a summary (counts, ages, result, via, histogram)
   -h, --help            show this help
 
 With no options, prints the summary. A flag may not be repeated.`;
