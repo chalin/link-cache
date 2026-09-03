@@ -34,10 +34,11 @@ function parseLine(raw) {
   const statusComma = head.lastIndexOf(',');
   if (statusComma < 0) return null;
   const status = head.slice(statusComma + 1).trim();
-  const url = head.slice(0, statusComma);
+  const urlField = head.slice(0, statusComma);
   if (!/^\d+$/.test(tsField) || !/^-?\d+$/.test(status)) return null;
-  if (url === '' || url.startsWith('"') !== url.endsWith('"')) return null;
-  return { url, status, ts: Number(tsField) };
+  if (urlField.startsWith('"') !== urlField.endsWith('"')) return null;
+  if (urlField === '' || urlField.replace(/"/g, '') === '') return null;
+  return { url: urlField, status, ts: Number(tsField) };
 }
 
 // Parse a whole CSV cache, keeping the original lines (so a prune can rewrite
@@ -408,6 +409,12 @@ export function parseArgs(argv) {
     path = a;
   }
 
+  // Scoping the staleness backstop to a URL subset would silently blind it
+  // to unmatched rot; refuse rather than pick a winner.
+  if (match && ops.some((op) => op.kind === 'max-age')) {
+    throw new Error('--max-age cannot be combined with --match');
+  }
+
   return { ops, path, match, help };
 }
 
@@ -419,7 +426,8 @@ the evolving cache, so \`-l 5 -p 5\` lists the 5 oldest about to be pruned,
 while \`-p 5 -l 5\` lists the next 5 after pruning.
 
   -l, --list NUM        list the NUM oldest entries
-  -m, --match REGEX     scope all operations to URLs matching REGEX
+  -m, --match REGEX     scope all operations except --max-age to URLs matching
+                        REGEX (the guard refuses the combination)
       --max-age DAYS    staleness guard: fail (exit 3) when the oldest
                         refreshable entry is older than DAYS days
   -p, --prune NUM[%]    drop the NUM (or NUM%) oldest non-manual entries, then

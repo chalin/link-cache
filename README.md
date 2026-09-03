@@ -7,14 +7,14 @@ Two tools:
 - **`lychee-norm-cache`**: run lychee over your built `public/` output, keeping
   the committed `link-cache.jsonc` cache and lychee's derived `.lycheecache` in
   sync.
-- **`link-cache`**: inspect and prune the cache: list the oldest entries, prune
+- **`link-cache`**: inspect and prune the cache. List the oldest entries, prune
   a count or percentage (optionally scoped by URL regex; `manual` entries are
   exempt, retiring via their `expires` date), or print a summary (result,
   provenance, ages). (`refcache` is a deprecated alias.)
 
 With a committed `lychee.toml` and `link-cache.jsonc`, these give a site a
 self-contained, cached link-checking setup: fast reruns, and diffs that reflect
-real changes: link statuses, and check recency for freshly re-verified entries.
+real changes (link statuses, and check recency for freshly re-verified entries).
 
 ## The owned cache: `link-cache.jsonc`
 
@@ -89,16 +89,16 @@ contract in `lib/cache.mjs`.
 - **Default (PR checks)**: every cached 2xx result is projected into lychee's
   CSV with a fresh timestamp, so lychee's `max_cache_age` never triggers and
   expired manual seeds aren't re-checked. A run verifies only URLs without a
-  cached 2xx result: URLs new to the cache, plus recorded failures and non-2xx
-  results (lychee's cache loader accepts success codes only, so those never
-  serve as hits and re-check on every run). Entries still age for real: their
-  `when` timestamps are untouched in the owned file; the default just doesn't
-  act on the age.
+  cached 2xx result, that is, URLs new to the cache plus recorded failures and
+  non-2xx results (lychee's cache loader accepts success codes only, so those
+  never serve as hits and re-check on every run). Entries still age for real
+  (their `when` timestamps are untouched in the owned file); the default just
+  doesn't act on the age.
 - **`--check-stale` (cache refresh)**: real timestamps are projected and
-  lychee's `max_cache_age` and manual `expires` dates apply: stale and expired
-  entries are re-verified. Use this mode in a scheduled cache-refresh job. In
-  steady state, `link-cache --prune` and `--check-stale` runs are what drive
-  re-checks.
+  lychee's `max_cache_age` and manual `expires` dates apply, so stale and
+  expired entries are re-verified. Use this mode in a scheduled cache-refresh
+  job. In steady state, `link-cache --prune` and `--check-stale` runs are what
+  drive re-checks.
 
 Because a default run never re-checks cached 2xx results, a stopped refresh job
 lets the cache age silently. Guard against that with the staleness guard:
@@ -107,9 +107,12 @@ lets the cache age silently. Guard against that with the staleness guard:
 link-cache --max-age 60   # exit 3 when the oldest refreshable entry is >60 days old
 ```
 
-Set the threshold to your lychee `max_cache_age` minus at least one refresh
-interval, and run the guard where its failure gets seen (the refresh job itself,
-or another scheduled check). The guard ages lychee-owned entries by their check
+Under a healthy `--check-stale` schedule the oldest entries legitimately age up
+to `max_cache_age` plus one refresh interval before their re-check lands, so set
+the threshold **at or above that sum** (a lower threshold fails on healthy
+caches); a prune-driven rotation sizes the threshold to its full prune cycle
+instead. Run the guard where its failure gets seen (the refresh job itself, or
+another scheduled check). The guard ages lychee-owned entries by their check
 time, and expired manual seeds by their `expires` date; unexpired seeds and
 named-resolver entries are exempt (their lifecycle is owned elsewhere).
 
@@ -137,9 +140,9 @@ non-2xx URL is re-checked on every run.
 ## Exit codes (`lychee-norm-cache`)
 
 - `0`: success.
-- `1`: dead links: the check ran and found failures.
-- `2`: preflight or sanity failure: lychee or `public/` missing, lychee config
-  error, or **zero links checked** (an empty or fully-excluded `public/` is a
+- `1`: dead links (the check ran and found failures).
+- `2`: preflight or sanity failure (lychee or `public/` missing, lychee config
+  error, or **zero links checked**; an empty or fully-excluded `public/` is a
   false-clean, not a pass).
 
 Warn-style wrappers can soften exit 1 (advisory link rot) while still failing
@@ -171,7 +174,7 @@ This puts both bins on your project's `PATH`.
 
 ## Usage
 
-Wire the bins into your `package.json` scripts (bare names: `npm run` puts
+Wire the bins into your `package.json` scripts, using bare names (`npm run` puts
 `node_modules/.bin` on the `PATH`):
 
 ```json

@@ -112,9 +112,9 @@ test('parseCache rejects empty-URL and non-numeric rows as malformed', () => {
   // The lenient 0.4.x parser accepted these as entries; the guard then
   // trusted junk age evidence.
   const { entries, malformed } = parseCache(
-    ',200,123\nhttps://a.example/,foo,123\nhttps://b.example/,200,bad\n"https://c.example/,200,123\nhttps://ok.example/,200,123\n',
+    ',200,123\n"",200,123\nhttps://a.example/,foo,123\nhttps://b.example/,200,bad\n"https://c.example/,200,123\nhttps://ok.example/,200,123\n',
   );
-  assert.equal(malformed, 4, 'junk rows count as malformed');
+  assert.equal(malformed, 5, 'junk rows count as malformed');
   assert.deepEqual(
     entries.map((e) => e.url),
     ['https://ok.example/'],
@@ -437,6 +437,21 @@ test('parseArgs accepts --max-age with a day count', () => {
     () => parseArgs(['--max-age', '30d']),
     /--max-age needs a day count/,
     'a non-numeric threshold is rejected',
+  );
+});
+
+test('parseArgs rejects --match combined with --max-age', () => {
+  // Scoping the staleness backstop to a URL subset silently blinds it to
+  // unmatched rot: the same false-clean class that retired --no-manual.
+  assert.throws(
+    () => parseArgs(['--match', 'github', '--max-age', '30']),
+    /--max-age cannot be combined with --match/,
+    'the combination is refused, not silently scoped',
+  );
+  assert.throws(
+    () => parseArgs(['--max-age', '30', '-m', 'github']),
+    /--max-age cannot be combined with --match/,
+    'order does not matter',
   );
 });
 
