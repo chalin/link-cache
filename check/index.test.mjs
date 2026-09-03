@@ -9,6 +9,7 @@ import {
   chmodSync,
   mkdirSync,
   mkdtempSync,
+  existsSync,
   readFileSync,
   rmSync,
   symlinkSync,
@@ -272,7 +273,7 @@ test('parseFailedUrls reads human [ERROR] lines', () => {
     '🔍 2 Total (in 1s) 🔗 2 Unique ✅ 0 OK 🚫 2 Errors',
   ].join('\n');
   assert.deepEqual(
-    [...parseFailedUrls(out)].sort(),
+    [...parseFailedUrls(out).keys()].sort(),
     ['file:///site/missing.html', 'https://dead.example/'],
     'both failing URLs extracted',
   );
@@ -290,7 +291,7 @@ test('parseFailedUrls reads status-bracket rejection lines', () => {
     '🔍 4 Total (in 1s) 🔗 4 Unique ✅ 0 OK 🚫 4 Errors',
   ].join('\n');
   assert.deepEqual(
-    [...parseFailedUrls(out)].sort(),
+    [...parseFailedUrls(out).keys()].sort(),
     [
       'https://cloud-native.slack.com/archives/CUJ6W5TLM',
       'https://gw-timeout.example/',
@@ -298,6 +299,22 @@ test('parseFailedUrls reads status-bracket rejection lines', () => {
       'https://slow.example/',
     ],
     'status-bracket and timeout failures extracted',
+  );
+  const failed = parseFailedUrls(out);
+  assert.equal(
+    failed.get('https://slow.example/'),
+    'timeout',
+    'a [TIMEOUT] tag records the timeout word',
+  );
+  assert.equal(
+    failed.get('https://gw-timeout.example/'),
+    'timeout',
+    'a timed-out numeric tag records the timeout word',
+  );
+  assert.equal(
+    failed.get('https://httpbin.org/status/404'),
+    'error',
+    'an HTTP rejection records the error word',
   );
 });
 
@@ -327,7 +344,7 @@ test('parseFailedUrls captures mailto failures', () => {
     '🔍 1 Total (in 1s) 🔗 1 Unique ✅ 0 OK 🚫 1 Error',
   ].join('\n');
   assert.deepEqual(
-    [...parseFailedUrls(out)],
+    [...parseFailedUrls(out).keys()],
     ['mailto:nobody@dead.example'],
     'the failing mailto is captured',
   );
@@ -344,7 +361,7 @@ test('parseFailedUrls ignores verbose success lines', () => {
     '🔍 4 Total (in 1s) 🔗 4 Unique ✅ 3 OK 🚫 1 Error',
   ].join('\n');
   assert.deepEqual(
-    [...parseFailedUrls(out)],
+    [...parseFailedUrls(out).keys()],
     ['https://dead.example/'],
     'only the rejected URL is treated as failing',
   );
@@ -359,7 +376,7 @@ test('parseFailedUrls treats cached errors as failures', () => {
     '🔍 2 Total (in 1s) 🔗 2 Unique ✅ 1 OK 🚫 1 Error',
   ].join('\n');
   assert.deepEqual(
-    [...parseFailedUrls(out)],
+    [...parseFailedUrls(out).keys()],
     ['https://dead.example/'],
     'the cached error is treated as failing',
   );
@@ -377,7 +394,7 @@ test('parsers see through ANSI color codes', () => {
     '🔍 2 Total\x1b[2m (in 355ms)\x1b[0m 🔗 2 Unique\x1b[38;5;82m\x1b[1m ✅ 1 OK\x1b[0m\x1b[38;5;197m\x1b[1m 🚫 1 Error\x1b[0m',
   ].join('\n');
   assert.deepEqual(
-    [...parseFailedUrls(out)],
+    [...parseFailedUrls(out).keys()],
     ['https://dead.example/'],
     'the color-wrapped failure line is parsed',
   );
@@ -399,7 +416,7 @@ test('parseFailedUrls ignores log-level lines', () => {
     '🔍 1 Total (in 1s) 🔗 1 Unique ✅ 0 OK 🚫 1 Error',
   ].join('\n');
   assert.deepEqual(
-    [...parseFailedUrls(out)],
+    [...parseFailedUrls(out).keys()],
     ['https://dead.example/'],
     'log lines contribute nothing',
   );
@@ -429,9 +446,14 @@ test('parseFailedUrls reads --format json error and timeout maps', () => {
       },
     }) + '\nHint: You can configure accepted/rejected response codes with `-a`';
   assert.deepEqual(
-    [...parseFailedUrls(out)].sort(),
+    [...parseFailedUrls(out).keys()].sort(),
     ['https://dead.example/', 'https://slow.example/'],
     'error_map and timeout_map URLs extracted despite the trailing hint',
+  );
+  assert.equal(
+    parseFailedUrls(out).get('https://slow.example/'),
+    'timeout',
+    'timeout_map entries record the timeout word',
   );
 });
 
@@ -445,7 +467,7 @@ test('parseFailedUrls reads --format json fail_map', () => {
     },
   });
   assert.deepEqual(
-    [...parseFailedUrls(out)],
+    [...parseFailedUrls(out).keys()],
     ['https://dead.example/'],
     'fail_map URL extracted',
   );
@@ -497,7 +519,7 @@ test('missing lychee binary is a preflight failure: exit 2', () => {
 const OWNED_WITH_EXPIRED = `{
   // seed
   "https://seed.example/": {
-    "status": 206,
+    "result": 206,
     "when": "2020-01-01T00:00:00Z",
     "via": "manual",
     "expires": "2020-06-30",
@@ -508,7 +530,7 @@ const OWNED_WITH_EXPIRED = `{
 const OWNED_WITH_SEED = `{
   // range seed
   "https://seed.example/x": {
-    "status": 206,
+    "result": 206,
     "when": "2026-08-01T00:00:00Z",
     "via": "manual",
     "expires": "2027-01-01",
@@ -517,11 +539,13 @@ const OWNED_WITH_SEED = `{
 `;
 
 test(
-  'a preflight failure leaves both caches untouched',
+  'a preflight failure leaves the owned cache untouched and clears the derived CSV',
   { skip: WIN_SKIP },
   () => {
-    // Expired entries are omitted from the projection, so folding a run that
-    // never happened would mislabel them as failed (-40).
+    // Under the default fresh-ts projection a run that never happened must not
+    // fold: the projected entries would be mislabeled as failed. The derived
+    // CSV is removed: it carries the projection's fresh timestamps, a lie
+    // about recency once no run consumed it.
     const site = makeSite({ stdout: 'error: bad usage', exit: 2 });
     writeFileSync(join(site, 'link-cache.jsonc'), OWNED_WITH_EXPIRED);
     try {
@@ -531,6 +555,11 @@ test(
         readFileSync(join(site, 'link-cache.jsonc'), 'utf8'),
         OWNED_WITH_EXPIRED,
         'the owned cache is byte-identical after a preflight failure',
+      );
+      assert.equal(
+        existsSync(join(site, '.lycheecache')),
+        false,
+        'the derived CSV is cleared',
       );
     } finally {
       rmSync(site, { recursive: true, force: true });
@@ -597,6 +626,75 @@ test(
 );
 
 test(
+  'default mode rejects forwarded cache-age flags',
+  { skip: WIN_SKIP },
+  () => {
+    // Lychee discards the whole cache by FILE age before reading row
+    // timestamps (verified live: "Cache is too old (age: 0s, max age: 0s)"),
+    // so fresh row projection cannot neutralize a forwarded --max-cache-age;
+    // the sanctioned re-check path is --check-stale.
+    const owned =
+      '{\n  "https://a.example/": {\n    "result": 200,\n    "when": "2020-01-01T00:00:00Z",\n    "via": "lychee",\n  },\n}\n';
+    for (const args of [['--max-cache-age', '0s'], ['--max-cache-age=0s']]) {
+      const site = makeSite({ stdout: SUMMARY_1OK, exit: 0 });
+      writeFileSync(join(site, 'link-cache.jsonc'), owned);
+      try {
+        const r = runWrapper(site, args);
+        assert.equal(r.status, 2, `default mode rejects ${args.join(' ')}`);
+        assert.match(r.stderr, /--check-stale/, 'the error names the remedy');
+      } finally {
+        rmSync(site, { recursive: true, force: true });
+      }
+    }
+    // Under --check-stale the flag is meaningful and passes through.
+    const site = makeSite({ stdout: SUMMARY_1OK, exit: 0 });
+    writeFileSync(join(site, 'link-cache.jsonc'), owned);
+    try {
+      const r = runWrapper(site, ['--check-stale', '--max-cache-age', '90d']);
+      assert.equal(r.status, 0, 'check-stale forwards cache-age flags');
+    } finally {
+      rmSync(site, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
+  'default run projects fresh timestamps; --check-stale projects real ones',
+  { skip: WIN_SKIP },
+  () => {
+    // The stub leaves the projected CSV untouched (csvAfterRun unset), so the
+    // post-run .lycheecache shows what lychee was handed.
+    const owned =
+      '{\n  "https://a.example/": {\n    "result": 200,\n    "when": "2020-01-01T00:00:00Z",\n    "via": "lychee",\n  },\n}\n';
+    const realTs = 1577836800; // 2020-01-01T00:00:00Z
+
+    for (const [args, wantReal] of [
+      [[], false],
+      [['--check-stale'], true],
+    ]) {
+      const site = makeSite({ stdout: SUMMARY_1OK, exit: 0 });
+      writeFileSync(join(site, 'link-cache.jsonc'), owned);
+      try {
+        const r = runWrapper(site, args);
+        assert.equal(r.status, 0, `run succeeds (${args})`);
+        const csv = readFileSync(join(site, '.lycheecache'), 'utf8');
+        const ts = Number(csv.trim().split(',').pop());
+        if (wantReal) {
+          assert.equal(ts, realTs, '--check-stale hands lychee the real ts');
+        } else {
+          assert.ok(
+            ts > realTs && ts * 1000 <= Date.now() + 1000,
+            'the default hands lychee a fresh ts',
+          );
+        }
+      } finally {
+        rmSync(site, { recursive: true, force: true });
+      }
+    }
+  },
+);
+
+test(
   'the wrapper passes --cache to lychee and rejects --cache=false',
   { skip: WIN_SKIP },
   () => {
@@ -610,7 +708,7 @@ test(
     chmodSync(join(site, 'stub-bin', 'lychee'), 0o755);
     writeFileSync(
       join(site, 'link-cache.jsonc'),
-      '{\n  "https://a.example/": {\n    "status": 200,\n    "when": "2026-01-01T00:00:00Z",\n    "via": "lychee",\n  },\n}\n',
+      '{\n  "https://a.example/": {\n    "result": 200,\n    "when": "2026-01-01T00:00:00Z",\n    "via": "lychee",\n  },\n}\n',
     );
     try {
       const r = runWrapper(site);
@@ -679,7 +777,7 @@ test(
       const r = runWrapper(site);
       assert.equal(r.status, 0, 'run succeeds');
       const owned = readFileSync(join(site, 'link-cache.jsonc'), 'utf8');
-      assert.match(owned, /"status": 206/, 'the absent entry keeps its status');
+      assert.match(owned, /"result": 206/, 'the absent entry keeps its status');
       assert.match(owned, /"via": "manual"/, 'provenance survives');
     } finally {
       rmSync(site, { recursive: true, force: true });
@@ -704,7 +802,7 @@ test(
       const r = runWrapper(site);
       assert.equal(r.status, 1, 'a completed run with failures exits 1');
       const owned = readFileSync(join(site, 'link-cache.jsonc'), 'utf8');
-      assert.match(owned, /"status": -40/, 'the failure is recorded');
+      assert.match(owned, /"result": "error"/, 'the failure is recorded');
       assert.match(owned, /\/\/ range seed/, 'the rationale comment is kept');
     } finally {
       rmSync(site, { recursive: true, force: true });
@@ -744,7 +842,12 @@ test(
         /"https:\/\/slow\.example\/"/,
         'the timeout is keyed',
       );
-      assert.match(owned, /"status": -40/, 'the failure is recorded');
+      assert.match(owned, /"result": "error"/, 'the rejection is recorded');
+      assert.match(
+        owned,
+        /"result": "timeout"/,
+        'the timeout word is recorded',
+      );
     } finally {
       rmSync(site, { recursive: true, force: true });
     }
@@ -781,14 +884,14 @@ test(
   },
 );
 
-// --- --migrate ---
+// --- --import ---
 
-test('--migrate converts .lycheecache to link-cache.jsonc', () => {
+test('--import converts .lycheecache to link-cache.jsonc', () => {
   const script = fileURLToPath(new URL('./index.mjs', import.meta.url));
   const site = mkdtempSync(join(tmpdir(), 'lnc-'));
   try {
     writeFileSync(join(site, '.lycheecache'), 'https://a.example/,200,100\n');
-    const r = spawnSync(process.execPath, [script, '--migrate'], {
+    const r = spawnSync(process.execPath, [script, '--import'], {
       cwd: site,
       encoding: 'utf8',
     });
@@ -800,7 +903,7 @@ test('--migrate converts .lycheecache to link-cache.jsonc', () => {
   }
 });
 
-test('--migrate fails without writing when the CSV has malformed lines', () => {
+test('--import fails without writing when the CSV has malformed lines', () => {
   // The migration is specified lossless: partial output would silently drop
   // committed data.
   const script = fileURLToPath(new URL('./index.mjs', import.meta.url));
@@ -810,28 +913,52 @@ test('--migrate fails without writing when the CSV has malformed lines', () => {
       join(site, '.lycheecache'),
       'https://a.example/,200,100\ngarbage-line\n',
     );
-    const r = spawnSync(process.execPath, [script, '--migrate'], {
+    const r = spawnSync(process.execPath, [script, '--import'], {
       cwd: site,
       encoding: 'utf8',
     });
-    assert.equal(r.status, 2, 'lossy migration is refused');
+    assert.equal(r.status, 2, 'lossy import is refused');
     assert.match(r.stderr, /malformed/, 'the error names the cause');
     assert.throws(
       () => readFileSync(join(site, 'link-cache.jsonc')),
-      'nothing is written on refusal',
+      'the owned cache remains absent after refusal',
     );
   } finally {
     rmSync(site, { recursive: true, force: true });
   }
 });
 
-test('--migrate refuses to overwrite an existing link-cache.jsonc', () => {
+test('--import fails without writing when a status has no result mapping', () => {
+  // A lexically well-formed CSV row can still carry a status outside the
+  // result domain (0, sub-100, 1000+); writing it would produce a file the
+  // parser itself rejects.
+  const script = fileURLToPath(new URL('./index.mjs', import.meta.url));
+  const site = mkdtempSync(join(tmpdir(), 'lnc-'));
+  try {
+    writeFileSync(join(site, '.lycheecache'), 'https://a.example/,0,100\n');
+    const r = spawnSync(process.execPath, [script, '--import'], {
+      cwd: site,
+      encoding: 'utf8',
+    });
+    assert.equal(r.status, 2, 'unmappable import is refused');
+    assert.match(r.stderr, /unmappable/, 'the error names the cause');
+    assert.equal(
+      existsSync(join(site, 'link-cache.jsonc')),
+      false,
+      'the owned cache remains absent after refusal',
+    );
+  } finally {
+    rmSync(site, { recursive: true, force: true });
+  }
+});
+
+test('--import refuses to overwrite an existing link-cache.jsonc', () => {
   const script = fileURLToPath(new URL('./index.mjs', import.meta.url));
   const site = mkdtempSync(join(tmpdir(), 'lnc-'));
   try {
     writeFileSync(join(site, '.lycheecache'), 'https://a.example/,200,100\n');
     writeFileSync(join(site, 'link-cache.jsonc'), '{\n}\n');
-    const r = spawnSync(process.execPath, [script, '--migrate'], {
+    const r = spawnSync(process.execPath, [script, '--import'], {
       cwd: site,
       encoding: 'utf8',
     });

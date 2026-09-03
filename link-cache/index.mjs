@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url';
 import {
   CSV_FILE,
   OWNED_FILE,
+  csvUnquote,
   parseOwned,
   serializeOwned,
 } from '../lib/cache.mjs';
@@ -23,17 +24,24 @@ const BUCKET_COUNT = 5;
 
 // --- parsing ---------------------------------------------------------------
 
+// Parse one URL,STATUS,TIMESTAMP line; null when malformed. Lexically strict:
+// junk rows must count as malformed (the staleness guard fails on them)
+// rather than pass as entries. Quote-grammar validation delegates to lib's
+// csvUnquote; the URL keeps its raw (possibly quoted) spelling because prune
+// rewrites lines byte-for-byte.
 function parseLine(raw) {
   const lastComma = raw.lastIndexOf(',');
   if (lastComma < 0) return null;
-  const ts = Number(raw.slice(lastComma + 1));
+  const tsField = raw.slice(lastComma + 1);
   const head = raw.slice(0, lastComma);
   const statusComma = head.lastIndexOf(',');
   if (statusComma < 0) return null;
   const status = head.slice(statusComma + 1).trim();
-  const url = head.slice(0, statusComma);
-  if (!Number.isInteger(ts) || status === '') return null;
-  return { url, status, ts };
+  const urlField = head.slice(0, statusComma);
+  if (!/^\d+$/.test(tsField) || !/^-?\d+$/.test(status)) return null;
+  const unquoted = csvUnquote(urlField);
+  if (unquoted === null || unquoted === '') return null;
+  return { url: urlField, status, ts: Number(tsField) };
 }
 
 // Parse a whole CSV cache, keeping the original lines (so a prune can rewrite
@@ -60,7 +68,7 @@ export function parseOwnedCache(text) {
   const owned = parseOwned(text);
   const entries = owned.entries.map((e, index) => ({
     url: e.url,
-    status: String(e.status),
+    status: String(e.result),
     ts: e.ts,
     via: e.via,
     index,
@@ -197,7 +205,7 @@ export function formatStats(stats, { now = Date.now() / 1000, path } = {}) {
     );
   }
 
-  lines.push('  Status:');
+  lines.push('  Result:');
   for (const [status, n] of stats.byStatus) {
     lines.push(`    ${status.padEnd(5)} ${n}`);
   }
@@ -224,22 +232,20 @@ export function formatStats(stats, { now = Date.now() / 1000, path } = {}) {
 // --- ordered execution -----------------------------------------------------
 
 // Run the parsed ops in order over the evolving cache, optionally scoped to
-// URLs matching `match` and, with `noManual`, to non-manual entries. Pure:
-// returns the text to print and the text to write (null when nothing was
-// pruned); no I/O.
+// URLs matching `match`. Pure: returns the text to print and the text to
+// write (null when nothing was pruned); no I/O.
 export function runOps(
   parsed,
   ops,
-  { now = Date.now() / 1000, path, match = null, noManual = false } = {},
+  { now = Date.now() / 1000, path, match = null } = {},
 ) {
   const removed = new Set();
   let pruned = 0;
+  let guardFailed = false;
   const out = [];
   // Match against the unquoted URL: legacy-CSV entries carry the raw
   // (possibly CSV-quoted) field, which would defeat anchored regexes.
-  const inScope = (e) =>
-    (match ? match.test(displayUrl(e.url)) : true) &&
-    (noManual ? e.via !== 'manual' : true);
+  const inScope = (e) => (match ? match.test(displayUrl(e.url)) : true);
   const current = () =>
     parsed.entries.filter((e) => !removed.has(e.index) && inScope(e));
 
@@ -259,6 +265,62 @@ export function runOps(
       out.push(
         `Pruned ${k} oldest ${k === 1 ? 'entry' : 'entries'} (${cur.length} → ${cur.length - k}).`,
       );
+    } else if (op.kind === 'max-age') {
+      // Staleness guard: with staleness checks off by default in
+      // lychee-norm-cache, a dead refresh job rots the cache silently; an
+      // entry aging past the threshold is the signal. Refreshable entries are
+      // the lychee-owned ones (via-less legacy CSV entries included), aged by
+      // their check time, plus expired manual seeds, aged from their expiry
+      // date (a live refresh job replaces them within a rotation). Unexpired
+      // and no-expires seeds and named-resolver entries are exempt: their
+      // timestamps never refresh on re-confirmation, so their age says
+      // nothing about the refresh job.
+      const limit = Number(op.value);
+      if (parsed.malformed > 0) {
+        guardFailed = true;
+        out.push(
+          `Staleness guard: ${parsed.malformed} malformed line(s); the cache's age cannot be trusted.`,
+        );
+      } else {
+        const candidates = [];
+        for (const e of current()) {
+          if (e.via === undefined || e.via === 'lychee') {
+            candidates.push({ url: e.url, ts: e.ts });
+          } else if (e.via === 'manual' && e.src?.expires !== undefined) {
+            const cutoff = Date.parse(`${e.src.expires}T23:59:59Z`) / 1000;
+            if (now > cutoff) candidates.push({ url: e.url, ts: cutoff });
+          }
+        }
+        // Corrupt evidence anywhere in the candidate set poisons the verdict:
+        // a single oldest-entry probe would let any past entry mask a
+        // future-dated one.
+        const future = candidates.find((c) => c.ts > now);
+        const oldest = candidates.sort((a, b) => a.ts - b.ts)[0];
+        if (future) {
+          guardFailed = true;
+          out.push(
+            `Staleness guard: future-dated timestamp on ${displayUrl(future.url)}; the cache's age cannot be trusted.`,
+          );
+        } else if (!oldest) {
+          out.push('Staleness guard: no refreshable entries; nothing to age.');
+        } else {
+          const ageDays = Math.floor((now - oldest.ts) / DAY);
+          if (now - oldest.ts > limit * DAY) {
+            guardFailed = true;
+            out.push(
+              `Staleness guard: oldest refreshable entry is ${ageDays}d old, ` +
+                `exceeds --max-age ${limit}d:\n  ${displayUrl(oldest.url)}\n` +
+                'Is the cache-refresh job running? If the URL has left the ' +
+                'site, its entry never re-checks: prune it (--match URL --prune 1).',
+            );
+          } else {
+            out.push(
+              `Staleness guard: oldest refreshable entry is ${ageDays}d old ` +
+                `(within --max-age ${limit}d).`,
+            );
+          }
+        }
+      }
     } else if (op.kind === 'summary') {
       const stats = computeStats(current(), {
         now,
@@ -286,7 +348,7 @@ export function runOps(
       writeText = parsed.lines.filter((_, i) => !removed.has(i)).join('\n');
     }
   }
-  return { output: out.join('\n\n'), writeText, pruned };
+  return { output: out.join('\n\n'), writeText, pruned, guardFailed };
 }
 
 // --- CLI -------------------------------------------------------------------
@@ -298,6 +360,7 @@ const FLAGS = new Map([
   ['--match', 'match'],
   ['-p', 'prune'],
   ['--prune', 'prune'],
+  ['--max-age', 'max-age'],
   ['-s', 'summary'],
   ['--summary', 'summary'],
 ]);
@@ -307,19 +370,12 @@ export function parseArgs(argv) {
   const seen = new Set();
   let path = null;
   let match = null;
-  let noManual = false;
   let help = false;
 
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '-h' || a === '--help') {
       help = true;
-      continue;
-    }
-    if (a === '--no-manual') {
-      if (seen.has('no-manual')) throw new Error(`repeated flag: ${a}`);
-      seen.add('no-manual');
-      noManual = true;
       continue;
     }
     const kind = FLAGS.get(a);
@@ -346,6 +402,9 @@ export function parseArgs(argv) {
       if (kind === 'prune' && !/^\d+%?$/.test(value)) {
         throw new Error(`--prune needs NUM or NUM%, got: ${value}`);
       }
+      if (kind === 'max-age' && !/^\d+$/.test(value)) {
+        throw new Error(`--max-age needs a day count, got: ${value}`);
+      }
       ops.push({ kind, value });
       continue;
     }
@@ -354,7 +413,13 @@ export function parseArgs(argv) {
     path = a;
   }
 
-  return { ops, path, match, noManual, help };
+  // Scoping the staleness backstop to a URL subset would silently blind it
+  // to unmatched rot; refuse rather than pick a winner.
+  if (match && ops.some((op) => op.kind === 'max-age')) {
+    throw new Error('--max-age cannot be combined with --match');
+  }
+
+  return { ops, path, match, help };
 }
 
 const USAGE = `Usage: link-cache [CACHE_FILE] [options]
@@ -365,14 +430,21 @@ the evolving cache, so \`-l 5 -p 5\` lists the 5 oldest about to be pruned,
 while \`-p 5 -l 5\` lists the next 5 after pruning.
 
   -l, --list NUM        list the NUM oldest entries
-  -m, --match REGEX     scope all operations to URLs matching REGEX
-      --no-manual       scope list and summary to non-manual entries
+  -m, --match REGEX     scope all operations except --max-age to URLs matching
+                        REGEX (the guard refuses the combination)
+      --max-age DAYS    staleness guard: fail (exit 3) when the oldest
+                        refreshable entry is older than DAYS days
   -p, --prune NUM[%]    drop the NUM (or NUM%) oldest non-manual entries, then
                         rewrite (manual entries retire via their expires date)
-  -s, --summary         print a summary (counts, ages, status, via, histogram)
+  -s, --summary         print a summary (counts, ages, result, via, histogram)
   -h, --help            show this help
 
-With no options, prints the summary. A flag may not be repeated.`;
+With no options, prints the summary. A flag may not be repeated. A --match
+scope shields out-of-scope entries from the operations, never from a prune's
+rewrite: they always survive intact.
+
+Exit codes: 0 success; 1 unreadable or malformed cache file; 2 usage error;
+3 staleness-guard breach.`;
 
 export function main(argv) {
   let args;
@@ -409,15 +481,15 @@ export function main(argv) {
 
   const now = Date.now() / 1000;
   const ops = args.ops.length ? args.ops : [{ kind: 'summary' }];
-  const { output, writeText } = runOps(parsed, ops, {
+  const { output, writeText, guardFailed } = runOps(parsed, ops, {
     now,
     path,
     match: args.match,
-    noManual: args.noManual,
   });
 
   if (output) console.log(output);
   if (writeText !== null) writeFileAtomic(path, writeText);
+  if (guardFailed) process.exit(3);
 }
 
 // Real-path compare, not `file://${argv[1]}`: npm links bins as symlinks, so

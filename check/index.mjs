@@ -11,13 +11,21 @@
 // or public/ missing, zero links checked, lychee config error).
 
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
+import {
+  existsSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  statSync,
+} from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
   CSV_FILE,
   OWNED_FILE,
+  RESULT_ERROR,
+  RESULT_TIMEOUT,
   mergeBack,
   migrateCsvText,
   parseCsv,
@@ -34,7 +42,7 @@ export const EXIT_OK = 0;
 export const EXIT_DEAD_LINKS = 1;
 export const EXIT_PREFLIGHT = 2;
 
-const USAGE = `Usage: lychee-norm-cache [--migrate] [lychee args...]
+const USAGE = `Usage: lychee-norm-cache [--check-stale] [--import] [lychee args...]
 
 Run lychee over this site's built ./public output. With a committed
 ${OWNED_FILE}, the ${CSV_FILE} handed to lychee is derived from it before the
@@ -42,8 +50,16 @@ run and folded back into it afterwards; otherwise ${CSV_FILE} is normalized in
 place (legacy mode). Bridges a GitHub token from the gh CLI when GITHUB_TOKEN
 isn't set; extra arguments pass through to lychee.
 
-  --migrate    convert an existing ${CSV_FILE} to ${OWNED_FILE} and exit
-  -h, --help   show this help
+By default staleness checks are not applied: cached 2xx results project with
+fresh timestamps, so a run verifies only URLs without a cached 2xx result
+(failure words and non-2xx results never serve as cache hits and re-check on
+every run). With --check-stale, real timestamps project, so lychee's
+max_cache_age and manual expires dates apply and stale entries are re-verified
+(the scheduled cache-refresh job's mode).
+
+  --check-stale  apply staleness checks (re-verify stale and expired entries)
+  --import       convert an existing ${CSV_FILE} to ${OWNED_FILE} and exit
+  -h, --help     show this help
 
 Exit codes: 0 success; 1 dead links; 2 preflight/sanity failure (missing
 lychee or public/, lychee config or usage errors, zero links verified).
@@ -129,10 +145,11 @@ export function mapLycheeExit(code, summary) {
   return EXIT_PREFLIGHT;
 }
 
-// URLs the run itself reported as failing: the human per-URL lines, or
-// --format json's failure maps. Positive per-URL evidence for the merge-back's
-// failure recording (CSV absence alone proves nothing: merge-back rules,
-// lib/cache.mjs).
+// URLs the run itself reported as failing, mapped to a failure word from
+// lychee's own tag vocabulary ("error" or "timeout"): the human per-URL
+// lines, or --format json's failure maps. Positive per-URL evidence for the
+// merge-back's failure recording (CSV absence alone proves nothing:
+// merge-back rules, lib/cache.mjs).
 //
 // Line shapes (lychee 0.24, verified against live output and Status::
 // code_as_string in its source): failures carry the word tags ERROR or
@@ -151,7 +168,7 @@ const FAILURE_TAGS = new Set(['ERROR', 'TIMEOUT']);
 const URL_SHAPE = /^(\w[\w+.-]*:\/\/|mailto:)/;
 export function parseFailedUrls(stdout) {
   stdout = stripAnsi(stdout);
-  const failed = new Set();
+  const failed = new Map();
   const trimmed = stdout.trim();
   if (trimmed.startsWith('{')) {
     // --format json, possibly with a trailing human "Hint:" line after the
@@ -159,11 +176,15 @@ export function parseFailedUrls(stdout) {
     // fail_map covers older lychee.
     try {
       const json = JSON.parse(trimmed.slice(0, trimmed.lastIndexOf('}') + 1));
-      for (const map of [json.fail_map, json.error_map, json.timeout_map]) {
+      for (const [map, word] of [
+        [json.fail_map, RESULT_ERROR],
+        [json.error_map, RESULT_ERROR],
+        [json.timeout_map, RESULT_TIMEOUT],
+      ]) {
         for (const failures of Object.values(map ?? {})) {
           for (const f of failures) {
             const url = typeof f.url === 'string' ? f.url : f.url?.url;
-            if (url) failed.add(url);
+            if (url) failed.set(url, word);
           }
         }
       }
@@ -178,10 +199,17 @@ export function parseFailedUrls(stdout) {
     if (/^\d+$/.test(tag)) {
       if (
         /\|\s*(Rejected|Failed|Error \(cached\)|Request timed out)/.test(rest)
-      )
-        failed.add(url);
+      ) {
+        failed.set(
+          url,
+          /Request timed out/.test(rest) ? RESULT_TIMEOUT : RESULT_ERROR,
+        );
+      }
     } else if (FAILURE_TAGS.has(tag.toUpperCase())) {
-      failed.add(url);
+      failed.set(
+        url,
+        tag.toUpperCase() === 'TIMEOUT' ? RESULT_TIMEOUT : RESULT_ERROR,
+      );
     }
   }
   return failed;
@@ -203,12 +231,12 @@ function fail(message) {
   return EXIT_PREFLIGHT;
 }
 
-function migrate(cwd) {
+function importCsv(cwd) {
   const csvPath = path.join(cwd, CSV_FILE);
   const ownedPath = path.join(cwd, OWNED_FILE);
   if (existsSync(ownedPath)) return fail(`${OWNED_FILE} already exists.`);
   if (!existsSync(csvPath)) return fail(`${CSV_FILE} not found.`);
-  const { text, count, malformed } = migrateCsvText(
+  const { text, count, malformed, conflicting, unmappable } = migrateCsvText(
     readFileSync(csvPath, 'utf8'),
   );
   // Migration is specified lossless: refuse rather than silently drop.
@@ -217,9 +245,19 @@ function migrate(cwd) {
       `${CSV_FILE} has ${malformed} malformed line(s); fix or remove them, then rerun.`,
     );
   }
+  if (conflicting) {
+    return fail(
+      `${CSV_FILE} has ${conflicting} URL(s) with conflicting duplicate rows; fix or remove them, then rerun.`,
+    );
+  }
+  if (unmappable) {
+    return fail(
+      `${CSV_FILE} has ${unmappable} entr${unmappable === 1 ? 'y' : 'ies'} with an unmappable status or timestamp; fix or remove them, then rerun.`,
+    );
+  }
   writeFileAtomic(ownedPath, text);
   console.log(
-    `Migrated ${count} entries to ${OWNED_FILE}. Commit it and gitignore ${CSV_FILE}.`,
+    `Imported ${count} ${count === 1 ? 'entry' : 'entries'} to ${OWNED_FILE}. Commit it and gitignore ${CSV_FILE}.`,
   );
   return EXIT_OK;
 }
@@ -231,7 +269,11 @@ function main(argv) {
   }
 
   const cwd = process.cwd();
-  if (argv.includes('--migrate')) return migrate(cwd);
+  if (argv.includes('--import')) return importCsv(cwd);
+
+  // Wrapper-owned flag: consumed here, never forwarded to lychee.
+  const checkStale = argv.includes('--check-stale');
+  argv = argv.filter((a) => a !== '--check-stale');
 
   if (!hasLychee()) {
     return fail(`lychee not found. Install: ${INSTALL_HINT}`);
@@ -257,14 +299,28 @@ function main(argv) {
   if (owned && argv.includes('--cache=false')) {
     return fail(`--cache=false is incompatible with ${OWNED_FILE}.`);
   }
+  // A forwarded cache-age flag is either inert (the fresh-timestamp
+  // projection defeats any realistic value) or, near zero, discards the
+  // just-written cache wholesale via lychee's file-age check; either way it
+  // contradicts the flag's intent, and --check-stale is the sanctioned
+  // re-check path.
+  const hasCacheAgeFlag = argv.some(
+    (a) => a === '--max-cache-age' || a.startsWith('--max-cache-age='),
+  );
+  if (owned && !checkStale && hasCacheAgeFlag) {
+    return fail(
+      '--max-cache-age has no effect on cached entries in the default mode; use --check-stale to re-verify stale entries.',
+    );
+  }
   const cacheArgs = hasCacheFlag ? [] : ['--cache'];
 
-  // Derive the CSV lychee will read from the owned cache.
+  // Derive the CSV lychee will read from the owned cache; keep the projected
+  // timestamps so merge-back can tell echoed cache hits from real re-checks.
+  let projectedTs = new Map();
   if (owned) {
-    writeFileAtomic(
-      cachePath,
-      serializeCsv(projectToCsv(owned.entries, { now })),
-    );
+    const projected = projectToCsv(owned.entries, { now, checkStale });
+    projectedTs = new Map(projected.map((e) => [e.url, e.ts]));
+    writeFileAtomic(cachePath, serializeCsv(projected));
   }
 
   const token = resolveToken();
@@ -290,16 +346,26 @@ function main(argv) {
     },
   );
   if (run.stdout) process.stdout.write(run.stdout);
+
+  // A failed or verdict-free run never folds; remove the derived CSV rather
+  // than leave it behind (the projection's fresh timestamps are a lie about
+  // recency once no completed run consumed them).
+  const bail = (message) => {
+    if (owned) rmSync(cachePath, { force: true });
+    return fail(message);
+  };
+
   if (run.error) {
-    return fail(`lychee failed to run: ${run.error.message}`);
+    return bail(`lychee failed to run: ${run.error.message}`);
   }
   const summary = parseSummary(run.stdout ?? '');
   const status = mapLycheeExit(run.status ?? 1, summary);
 
-  // On a preflight failure lychee produced no trustworthy results: leave both
-  // caches untouched (folding would mislabel unprojected entries as failed).
+  // On a preflight failure lychee produced no trustworthy results: leave the
+  // owned cache untouched (folding would mislabel unprojected entries as
+  // failed).
   if (status === EXIT_PREFLIGHT) {
-    return fail('lychee did not complete a check; caches left untouched.');
+    return bail('lychee did not complete a check; owned cache left untouched.');
   }
 
   // A clean run in which nothing got a verdict is a false-clean (empty or
@@ -307,7 +373,7 @@ function main(argv) {
   // unattempted entries as failed, so the check precedes the fold. Cache hits
   // count toward OK in lychee's summary, so a fully-cached run passes.
   if (status === EXIT_OK && summary && summary.ok + summary.errors === 0) {
-    return fail('lychee verified 0 links: empty or fully-excluded public/?');
+    return bail('lychee verified 0 links: empty or fully-excluded public/?');
   }
 
   // Fold the post-run CSV back into the owned cache (also on dead links, so a
@@ -320,14 +386,16 @@ function main(argv) {
     // Failure evidence counts only on a dead-links exit: a green run means
     // lychee accepted everything it printed (--accept-timeouts runs print
     // "[TIMEOUT] URL …" lines while exiting 0), so recording those would mint
-    // and churn -40 entries on every clean run.
+    // and churn failure entries on every clean run.
     const failedUrls =
       status === EXIT_DEAD_LINKS
         ? parseFailedUrls(run.stdout ?? '')
-        : new Set();
+        : new Map();
     writeFileAtomic(
       ownedPath,
-      serializeOwned(mergeBack(owned, csvEntries, { now, failedUrls })),
+      serializeOwned(
+        mergeBack(owned, csvEntries, { now, failedUrls, projectedTs }),
+      ),
     );
     writeFileAtomic(cachePath, sortCacheText(readFileSync(cachePath, 'utf8')));
   } else if (existsSync(cachePath)) {
