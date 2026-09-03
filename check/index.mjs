@@ -236,13 +236,18 @@ function migrate(cwd) {
   const ownedPath = path.join(cwd, OWNED_FILE);
   if (existsSync(ownedPath)) return fail(`${OWNED_FILE} already exists.`);
   if (!existsSync(csvPath)) return fail(`${CSV_FILE} not found.`);
-  const { text, count, malformed, unmappable } = migrateCsvText(
+  const { text, count, malformed, conflicting, unmappable } = migrateCsvText(
     readFileSync(csvPath, 'utf8'),
   );
   // Migration is specified lossless: refuse rather than silently drop.
   if (malformed) {
     return fail(
       `${CSV_FILE} has ${malformed} malformed line(s); fix or remove them, then rerun.`,
+    );
+  }
+  if (conflicting) {
+    return fail(
+      `${CSV_FILE} has ${conflicting} URL(s) with conflicting duplicate rows; fix or remove them, then rerun.`,
     );
   }
   if (unmappable) {
@@ -293,6 +298,17 @@ function main(argv) {
   );
   if (owned && argv.includes('--cache=false')) {
     return fail(`--cache=false is incompatible with ${OWNED_FILE}.`);
+  }
+  // Lychee discards the whole cache by file age before reading row
+  // timestamps, so the default fresh-timestamp projection cannot neutralize a
+  // forwarded cache-age flag; the sanctioned re-check path is --check-stale.
+  const hasCacheAgeFlag = argv.some(
+    (a) => a === '--max-cache-age' || a.startsWith('--max-cache-age='),
+  );
+  if (owned && !checkStale && hasCacheAgeFlag) {
+    return fail(
+      '--max-cache-age has no effect on cached entries in the default mode; use --check-stale to re-verify stale entries.',
+    );
   }
   const cacheArgs = hasCacheFlag ? [] : ['--cache'];
 

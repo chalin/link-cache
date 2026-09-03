@@ -626,6 +626,39 @@ test(
 );
 
 test(
+  'default mode rejects forwarded cache-age flags',
+  { skip: WIN_SKIP },
+  () => {
+    // Lychee discards the whole cache by FILE age before reading row
+    // timestamps (verified live: "Cache is too old (age: 0s, max age: 0s)"),
+    // so fresh row projection cannot neutralize a forwarded --max-cache-age;
+    // the sanctioned re-check path is --check-stale.
+    const owned =
+      '{\n  "https://a.example/": {\n    "result": 200,\n    "when": "2020-01-01T00:00:00Z",\n    "via": "lychee",\n  },\n}\n';
+    for (const args of [['--max-cache-age', '0s'], ['--max-cache-age=0s']]) {
+      const site = makeSite({ stdout: SUMMARY_1OK, exit: 0 });
+      writeFileSync(join(site, 'link-cache.jsonc'), owned);
+      try {
+        const r = runWrapper(site, args);
+        assert.equal(r.status, 2, `default mode rejects ${args.join(' ')}`);
+        assert.match(r.stderr, /--check-stale/, 'the error names the remedy');
+      } finally {
+        rmSync(site, { recursive: true, force: true });
+      }
+    }
+    // Under --check-stale the flag is meaningful and passes through.
+    const site = makeSite({ stdout: SUMMARY_1OK, exit: 0 });
+    writeFileSync(join(site, 'link-cache.jsonc'), owned);
+    try {
+      const r = runWrapper(site, ['--check-stale', '--max-cache-age', '90d']);
+      assert.equal(r.status, 0, 'check-stale forwards cache-age flags');
+    } finally {
+      rmSync(site, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
   'default run projects fresh timestamps; --check-stale projects real ones',
   { skip: WIN_SKIP },
   () => {

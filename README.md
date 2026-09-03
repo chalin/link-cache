@@ -203,9 +203,9 @@ npm run link-cache -- --max-age 60  # staleness guard (exit 3 when breached)
 `lychee-norm-cache` runs in the current directory (your site root) and forwards
 any extra arguments to lychee. Run either tool with `--help` for its full
 options, and `lychee --help` for the link-checking flags `lychee-norm-cache`
-forwards (e.g. `--offline`). To force re-checks, use `--check-stale` rather than
-lychee's cache-age flags: under the default fresh-timestamp projection,
-`--max-cache-age 0` has nothing to bite.
+forwards (e.g. `--offline`). To force re-checks, use `--check-stale`; the
+default mode rejects a forwarded `--max-cache-age`, whose file-age check would
+silently defeat the fresh-timestamp projection.
 
 ## Development
 

@@ -24,8 +24,9 @@ const BUCKET_COUNT = 5;
 // --- parsing ---------------------------------------------------------------
 
 // Parse one URL,STATUS,TIMESTAMP line; null when malformed. Lexically strict,
-// matching lib/cache.mjs's parseCsvLine: junk rows must count as malformed
-// (the staleness guard fails on them) rather than pass as entries.
+// matching lib/cache.mjs's quote grammar: junk rows must count as malformed
+// (the staleness guard fails on them) rather than pass as entries. The URL
+// keeps its raw (possibly quoted) spelling: prune rewrites lines byte-for-byte.
 function parseLine(raw) {
   const lastComma = raw.lastIndexOf(',');
   if (lastComma < 0) return null;
@@ -36,8 +37,19 @@ function parseLine(raw) {
   const status = head.slice(statusComma + 1).trim();
   const urlField = head.slice(0, statusComma);
   if (!/^\d+$/.test(tsField) || !/^-?\d+$/.test(status)) return null;
-  if (urlField.startsWith('"') !== urlField.endsWith('"')) return null;
-  if (urlField === '' || urlField.replace(/"/g, '') === '') return null;
+  let unquoted;
+  if (
+    urlField.startsWith('"') &&
+    urlField.endsWith('"') &&
+    urlField.length >= 2
+  ) {
+    unquoted = urlField.slice(1, -1);
+    if (unquoted.replace(/""/g, '').includes('"')) return null;
+  } else {
+    if (urlField.includes('"')) return null;
+    unquoted = urlField;
+  }
+  if (unquoted === '') return null;
   return { url: urlField, status, ts: Number(tsField) };
 }
 
