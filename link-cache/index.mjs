@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url';
 import {
   CSV_FILE,
   OWNED_FILE,
+  csvUnquote,
   parseOwned,
   serializeOwned,
 } from '../lib/cache.mjs';
@@ -23,10 +24,11 @@ const BUCKET_COUNT = 5;
 
 // --- parsing ---------------------------------------------------------------
 
-// Parse one URL,STATUS,TIMESTAMP line; null when malformed. Lexically strict,
-// matching lib/cache.mjs's quote grammar: junk rows must count as malformed
-// (the staleness guard fails on them) rather than pass as entries. The URL
-// keeps its raw (possibly quoted) spelling: prune rewrites lines byte-for-byte.
+// Parse one URL,STATUS,TIMESTAMP line; null when malformed. Lexically strict:
+// junk rows must count as malformed (the staleness guard fails on them)
+// rather than pass as entries. Quote-grammar validation delegates to lib's
+// csvUnquote; the URL keeps its raw (possibly quoted) spelling because prune
+// rewrites lines byte-for-byte.
 function parseLine(raw) {
   const lastComma = raw.lastIndexOf(',');
   if (lastComma < 0) return null;
@@ -37,19 +39,8 @@ function parseLine(raw) {
   const status = head.slice(statusComma + 1).trim();
   const urlField = head.slice(0, statusComma);
   if (!/^\d+$/.test(tsField) || !/^-?\d+$/.test(status)) return null;
-  let unquoted;
-  if (
-    urlField.startsWith('"') &&
-    urlField.endsWith('"') &&
-    urlField.length >= 2
-  ) {
-    unquoted = urlField.slice(1, -1);
-    if (unquoted.replace(/""/g, '').includes('"')) return null;
-  } else {
-    if (urlField.includes('"')) return null;
-    unquoted = urlField;
-  }
-  if (unquoted === '') return null;
+  const unquoted = csvUnquote(urlField);
+  if (unquoted === null || unquoted === '') return null;
   return { url: urlField, status, ts: Number(tsField) };
 }
 
@@ -319,7 +310,8 @@ export function runOps(
             out.push(
               `Staleness guard: oldest refreshable entry is ${ageDays}d old, ` +
                 `exceeds --max-age ${limit}d:\n  ${displayUrl(oldest.url)}\n` +
-                'Is the cache-refresh job running?',
+                'Is the cache-refresh job running? If the URL has left the ' +
+                'site, its entry never re-checks: prune it (--match URL --prune 1).',
             );
           } else {
             out.push(

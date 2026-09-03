@@ -9,8 +9,9 @@ Two tools:
   sync.
 - **`link-cache`**: inspect and prune the cache. List the oldest entries, prune
   a count or percentage (optionally scoped by URL regex; `manual` entries are
-  exempt, retiring via their `expires` date), or print a summary (result,
-  provenance, ages). (`refcache` is a deprecated alias.)
+  exempt, and those with an `expires` date retire then), print a summary
+  (result, provenance, ages), or run the staleness guard (`--max-age`).
+  (`refcache` is a deprecated alias.)
 
 With a committed `lychee.toml` and `link-cache.jsonc`, these give a site a
 self-contained, cached link-checking setup: fast reruns, and diffs that reflect
@@ -66,7 +67,11 @@ Each entry records:
   re-check.
 - **`expires`** (optional, `manual` entries): `YYYY-MM-DD`. Until then the entry
   is trusted; after that, a `--check-stale` run re-checks it live and replaces
-  it with the verified result.
+  it with the verified result. Seed **2xx results only**: a seed's job is to
+  vouch that a URL is good so it isn't re-checked, and only 2xx results serve as
+  cache hits, so a non-2xx seed is re-checked every run, fails it, and is
+  replaced by the live result. For URLs whose expected status is non-2xx, use
+  `exclude` or `accept` instead.
 
 Lychee's own CSV cache, `.lycheecache`, is **derived**: `lychee-norm-cache`
 projects the owned cache into it before each run and folds lychee's results back

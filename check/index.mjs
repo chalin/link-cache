@@ -257,7 +257,7 @@ function importCsv(cwd) {
   }
   writeFileAtomic(ownedPath, text);
   console.log(
-    `Imported ${count} entries to ${OWNED_FILE}. Commit it and gitignore ${CSV_FILE}.`,
+    `Imported ${count} ${count === 1 ? 'entry' : 'entries'} to ${OWNED_FILE}. Commit it and gitignore ${CSV_FILE}.`,
   );
   return EXIT_OK;
 }
@@ -299,9 +299,11 @@ function main(argv) {
   if (owned && argv.includes('--cache=false')) {
     return fail(`--cache=false is incompatible with ${OWNED_FILE}.`);
   }
-  // Lychee discards the whole cache by file age before reading row
-  // timestamps, so the default fresh-timestamp projection cannot neutralize a
-  // forwarded cache-age flag; the sanctioned re-check path is --check-stale.
+  // A forwarded cache-age flag is either inert (the fresh-timestamp
+  // projection defeats any realistic value) or, near zero, discards the
+  // just-written cache wholesale via lychee's file-age check; either way it
+  // contradicts the flag's intent, and --check-stale is the sanctioned
+  // re-check path.
   const hasCacheAgeFlag = argv.some(
     (a) => a === '--max-cache-age' || a.startsWith('--max-cache-age='),
   );
