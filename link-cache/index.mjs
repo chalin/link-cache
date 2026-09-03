@@ -228,13 +228,12 @@ export function formatStats(stats, { now = Date.now() / 1000, path } = {}) {
 // --- ordered execution -----------------------------------------------------
 
 // Run the parsed ops in order over the evolving cache, optionally scoped to
-// URLs matching `match` and, with `noManual`, to non-manual entries. Pure:
-// returns the text to print and the text to write (null when nothing was
-// pruned); no I/O.
+// URLs matching `match`. Pure: returns the text to print and the text to
+// write (null when nothing was pruned); no I/O.
 export function runOps(
   parsed,
   ops,
-  { now = Date.now() / 1000, path, match = null, noManual = false } = {},
+  { now = Date.now() / 1000, path, match = null } = {},
 ) {
   const removed = new Set();
   let pruned = 0;
@@ -242,9 +241,7 @@ export function runOps(
   const out = [];
   // Match against the unquoted URL: legacy-CSV entries carry the raw
   // (possibly CSV-quoted) field, which would defeat anchored regexes.
-  const inScope = (e) =>
-    (match ? match.test(displayUrl(e.url)) : true) &&
-    (noManual ? e.via !== 'manual' : true);
+  const inScope = (e) => (match ? match.test(displayUrl(e.url)) : true);
   const current = () =>
     parsed.entries.filter((e) => !removed.has(e.index) && inScope(e));
 
@@ -273,9 +270,7 @@ export function runOps(
       // date (a live refresh job replaces them within a rotation). Unexpired
       // and no-expires seeds and named-resolver entries are exempt: their
       // timestamps never refresh on re-confirmation, so their age says
-      // nothing about the refresh job. The guard applies its own manual
-      // semantics: --no-manual (list/summary scoping) never blinds it to
-      // expired seeds, which would be a false-clean on the rot it watches.
+      // nothing about the refresh job.
       const limit = Number(op.value);
       if (parsed.malformed > 0) {
         guardFailed = true;
@@ -284,12 +279,7 @@ export function runOps(
         );
       } else {
         const candidates = [];
-        const guardScope = parsed.entries.filter(
-          (e) =>
-            !removed.has(e.index) &&
-            (match ? match.test(displayUrl(e.url)) : true),
-        );
-        for (const e of guardScope) {
+        for (const e of current()) {
           if (e.via === undefined || e.via === 'lychee') {
             candidates.push({ url: e.url, ts: e.ts });
           } else if (e.via === 'manual' && e.src?.expires !== undefined) {
@@ -375,19 +365,12 @@ export function parseArgs(argv) {
   const seen = new Set();
   let path = null;
   let match = null;
-  let noManual = false;
   let help = false;
 
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '-h' || a === '--help') {
       help = true;
-      continue;
-    }
-    if (a === '--no-manual') {
-      if (seen.has('no-manual')) throw new Error(`repeated flag: ${a}`);
-      seen.add('no-manual');
-      noManual = true;
       continue;
     }
     const kind = FLAGS.get(a);
@@ -425,7 +408,7 @@ export function parseArgs(argv) {
     path = a;
   }
 
-  return { ops, path, match, noManual, help };
+  return { ops, path, match, help };
 }
 
 const USAGE = `Usage: link-cache [CACHE_FILE] [options]
@@ -439,7 +422,6 @@ while \`-p 5 -l 5\` lists the next 5 after pruning.
   -m, --match REGEX     scope all operations to URLs matching REGEX
       --max-age DAYS    staleness guard: fail (exit 3) when the oldest
                         refreshable entry is older than DAYS days
-      --no-manual       scope list and summary to non-manual entries
   -p, --prune NUM[%]    drop the NUM (or NUM%) oldest non-manual entries, then
                         rewrite (manual entries retire via their expires date)
   -s, --summary         print a summary (counts, ages, result, via, histogram)
@@ -486,7 +468,6 @@ export function main(argv) {
     now,
     path,
     match: args.match,
-    noManual: args.noManual,
   });
 
   if (output) console.log(output);

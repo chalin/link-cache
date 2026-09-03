@@ -405,37 +405,16 @@ test('match tests the unquoted URL on the legacy CSV path', () => {
   assert.match(output, /a\.example\/x,y/, 'anchored regex matches a comma URL');
 });
 
-// --- --no-manual scoping ---
+// --- --no-manual (dropped in 0.5.0) ---
 
-test('parseArgs accepts --no-manual', () => {
-  assert.equal(parseArgs(['--no-manual']).noManual, true, 'flag captured');
-  assert.equal(parseArgs([]).noManual, false, 'defaults to false');
+test('parseArgs rejects the dropped --no-manual flag', () => {
+  // Shipped only in the unpublished 0.4.2; its telemetry job moved to
+  // --max-age, which owns its manual semantics outright.
   assert.throws(
-    () => parseArgs(['--no-manual', '--no-manual']),
-    /repeated flag/,
-    'repeat rejected',
+    () => parseArgs(['--no-manual']),
+    /unknown flag/,
+    'the dropped flag is unknown',
   );
-});
-
-test('no-manual scopes list and summary to non-manual entries', () => {
-  const parsed = parseOwnedCache(OWNED_SAMPLE);
-  const { output } = runOps(
-    parsed,
-    [{ kind: 'list', value: '5' }, { kind: 'summary' }],
-    { now: NOW, noManual: true },
-  );
-  assert.ok(!output.includes('a.example'), 'manual seed excluded from list');
-  assert.match(output, /b\.example/, 'non-manual entries listed');
-  assert.match(output, /Entries: 2/, 'summary counts non-manual only');
-});
-
-test('no-manual never drops manual entries on a prune rewrite', () => {
-  const parsed = parseOwnedCache(OWNED_SAMPLE);
-  const { writeText } = runOps(parsed, [{ kind: 'prune', value: '1' }], {
-    now: NOW,
-    noManual: true,
-  });
-  assert.match(writeText, /a\.example/, 'manual seed survives the rewrite');
 });
 
 // --- --max-age staleness guard ---
@@ -581,20 +560,6 @@ test('max-age compares real elapsed time, not floored days', () => {
   );
   const ok = runOps(under, [{ kind: 'max-age', value: '60' }], { now: NOW });
   assert.equal(ok.guardFailed, false, '60d - 1h is within 60d');
-});
-
-test('max-age ignores --no-manual scoping', () => {
-  // --no-manual scopes list and summary; letting it blind the guard to
-  // expired seeds would be a false-clean on the exact rot the guard watches.
-  const parsed = guardCache(
-    block('https://seed.example/', NOW - 400 * DAY, 'manual', '2001-01-01'),
-    block('https://ok.example/', NOW, 'lychee'),
-  );
-  const { guardFailed } = runOps(parsed, [{ kind: 'max-age', value: '100' }], {
-    now: NOW,
-    noManual: true,
-  });
-  assert.equal(guardFailed, true, 'the expired seed still trips the guard');
 });
 
 test('max-age fails on a future-dated entry even when not the oldest', () => {

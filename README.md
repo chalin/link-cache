@@ -186,7 +186,6 @@ npm run check:links              # verify URLs not yet in the cache
 npm run check:links -- --check-stale  # also re-verify stale/expired entries
 npm run link-cache -- --summary  # cache stats (count, oldest, result, via, ages)
 npm run link-cache -- --match 'github\.com' --prune 10  # trim 10 oldest matching
-npm run link-cache -- --no-manual --list 5  # 5 oldest, skipping manual seeds
 npm run link-cache -- --max-age 60  # staleness guard (exit 3 when breached)
 ```
 
