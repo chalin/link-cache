@@ -269,7 +269,9 @@ export function runOps(
       // date (a live refresh job replaces them within a rotation). Unexpired
       // and no-expires seeds and named-resolver entries are exempt: their
       // timestamps never refresh on re-confirmation, so their age says
-      // nothing about the refresh job.
+      // nothing about the refresh job. The guard applies its own manual
+      // semantics: --no-manual (list/summary scoping) never blinds it to
+      // expired seeds, which would be a false-clean on the rot it watches.
       const limit = Number(op.value);
       if (parsed.malformed > 0) {
         guardFailed = true;
@@ -278,7 +280,12 @@ export function runOps(
         );
       } else {
         const candidates = [];
-        for (const e of current()) {
+        const guardScope = parsed.entries.filter(
+          (e) =>
+            !removed.has(e.index) &&
+            (match ? match.test(displayUrl(e.url)) : true),
+        );
+        for (const e of guardScope) {
           if (e.via === undefined || e.via === 'lychee') {
             candidates.push({ url: e.url, ts: e.ts });
           } else if (e.via === 'manual' && e.src?.expires !== undefined) {

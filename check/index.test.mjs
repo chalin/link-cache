@@ -542,10 +542,10 @@ test(
   'a preflight failure leaves the owned cache untouched and clears the derived CSV',
   { skip: WIN_SKIP },
   () => {
-    // Expired entries are omitted from the projection, so folding a run that
-    // never happened would mislabel them as failed. The derived CSV is
-    // removed: it carries the projection's fresh timestamps, a lie about
-    // recency once no run consumed it.
+    // Under the default fresh-ts projection a run that never happened must not
+    // fold: the projected entries would be mislabeled as failed. The derived
+    // CSV is removed: it carries the projection's fresh timestamps, a lie
+    // about recency once no run consumed it.
     const site = makeSite({ stdout: 'error: bad usage', exit: 2 });
     writeFileSync(join(site, 'link-cache.jsonc'), OWNED_WITH_EXPIRED);
     try {

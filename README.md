@@ -48,10 +48,10 @@ normal 3-way merge.
 Each entry records:
 
 - **`result`**: an HTTP status int (`200`, `206`, …), or a failure word from
-  lychee's own tag vocabulary (`"error"`, `"timeout"`). Only HTTP results are
-  handed to lychee's cache; failure words live in the owned file only. (0.4.x
-  files spelled this field `status` with negative error codes; they're read
-  compatibly and rewritten to `result` on the first run.)
+  lychee's own tag vocabulary (`"error"`, `"timeout"`). Only 2xx results serve
+  as lychee cache hits; failure words and non-2xx results live in the owned file
+  only. (0.4.x files spelled this field `status` with negative error codes;
+  they're read compatibly and rewritten to `result` on the first run.)
 - **`when`**: the moment the result was established, as RFC3339 UTC at whole
   seconds (`YYYY-MM-DDTHH:MM:SSZ`), converting exactly to and from lychee's
   epoch-seconds cache timestamps. The form is strict (no fractional seconds, no
@@ -73,32 +73,34 @@ projects the owned cache into it before each run and folds lychee's results back
 afterwards. Gitignore `.lycheecache`; commit `link-cache.jsonc`. A re-check that
 changes an entry's result replaces the entry (provenance moves to `lychee`); a
 re-confirmation leaves provenance-bearing entries (`manual`, named resolvers)
-untouched, while `lychee`-owned entries refresh their `when` to record recency.
-A URL the run itself reports as failing is recorded with its failure word; an
-entry that merely goes missing from lychee's CSV is left untouched (cache-status
-excludes, cache aging, and site changes all remove entries from healthy runs).
-Failure evidence counts only on a dead-links exit, and new failure entries mint
-for http(s) URLs only; for the rationale, see `mergeBack`'s contract in
-`lib/cache.mjs`.
+untouched, while a live re-check of a `lychee`-owned entry refreshes its `when`
+to record recency (a default-mode cache hit is not a re-check and leaves `when`
+untouched). A URL the run itself reports as failing is recorded with its failure
+word; an entry that merely goes missing from lychee's CSV is left untouched
+(cache-status excludes, cache aging, and site changes all remove entries from
+healthy runs). Failure evidence counts only on a dead-links exit, and new
+failure entries mint for http(s) URLs only; for the rationale, see `mergeBack`'s
+contract in `lib/cache.mjs`.
 
 ## Two modes: PR checks vs. cache refresh
 
 `lychee-norm-cache` applies staleness checks only on request:
 
-- **Default (PR checks)**: every cached HTTP result is projected into lychee's
+- **Default (PR checks)**: every cached 2xx result is projected into lychee's
   CSV with a fresh timestamp, so lychee's `max_cache_age` never triggers and
   expired manual seeds aren't re-checked. A run verifies only URLs without a
-  cached HTTP result: URLs new to the cache, plus recorded failures (failure
-  words never project, so those URLs re-check on every run). Entries still age
-  for real: their `when` timestamps are untouched in the owned file; the default
-  just doesn't act on the age.
+  cached 2xx result: URLs new to the cache, plus recorded failures and non-2xx
+  results (lychee's cache loader accepts success codes only, so those never
+  serve as hits and re-check on every run). Entries still age for real: their
+  `when` timestamps are untouched in the owned file; the default just doesn't
+  act on the age.
 - **`--check-stale` (cache refresh)**: real timestamps are projected and
   lychee's `max_cache_age` and manual `expires` dates apply: stale and expired
   entries are re-verified. Use this mode in a scheduled cache-refresh job. In
   steady state, `link-cache --prune` and `--check-stale` runs are what drive
   re-checks.
 
-Because a default run never re-checks cached HTTP results, a stopped refresh job
+Because a default run never re-checks cached 2xx results, a stopped refresh job
 lets the cache age silently. Guard against that with the staleness guard:
 
 ```sh
@@ -128,7 +130,9 @@ re-normalizes the file.
 In your `lychee.toml`, prefer URL-scoped mechanisms (`exclude` patterns, or
 manual seeds in the owned cache) for URL-specific problems, and reserve lychee's
 `accept` list for statuses that are acceptable **site-wide**: an accepted status
-is recorded in the committed cache for every URL that returns it.
+is recorded in the committed cache for every URL that returns it. Note that
+`accept` buys no caching: only 2xx results serve as cache hits, so an accepted
+non-2xx URL is re-checked on every run.
 
 ## Exit codes (`lychee-norm-cache`)
 
@@ -197,7 +201,9 @@ npm run link-cache -- --max-age 60  # staleness guard (exit 3 when breached)
 `lychee-norm-cache` runs in the current directory (your site root) and forwards
 any extra arguments to lychee. Run either tool with `--help` for its full
 options, and `lychee --help` for the link-checking flags `lychee-norm-cache`
-forwards (e.g. `--offline`, `--max-cache-age 0`).
+forwards (e.g. `--offline`). To force re-checks, use `--check-stale` rather than
+lychee's cache-age flags: under the default fresh-timestamp projection,
+`--max-cache-age 0` has nothing to bite.
 
 ## Development
 

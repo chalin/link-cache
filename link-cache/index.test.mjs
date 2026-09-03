@@ -569,6 +569,20 @@ test('max-age compares real elapsed time, not floored days', () => {
   assert.equal(ok.guardFailed, false, '60d - 1h is within 60d');
 });
 
+test('max-age ignores --no-manual scoping', () => {
+  // --no-manual scopes list and summary; letting it blind the guard to
+  // expired seeds would be a false-clean on the exact rot the guard watches.
+  const parsed = guardCache(
+    block('https://seed.example/', NOW - 400 * DAY, 'manual', '2001-01-01'),
+    block('https://ok.example/', NOW, 'lychee'),
+  );
+  const { guardFailed } = runOps(parsed, [{ kind: 'max-age', value: '100' }], {
+    now: NOW,
+    noManual: true,
+  });
+  assert.equal(guardFailed, true, 'the expired seed still trips the guard');
+});
+
 test('a breached guard exits 3', () => {
   const script = fileURLToPath(new URL('./index.mjs', import.meta.url));
   const dir = mkdtempSync(join(tmpdir(), 'link-cache-'));

@@ -50,12 +50,12 @@ run and folded back into it afterwards; otherwise ${CSV_FILE} is normalized in
 place (legacy mode). Bridges a GitHub token from the gh CLI when GITHUB_TOKEN
 isn't set; extra arguments pass through to lychee.
 
-By default staleness checks are not applied: cached HTTP results project with
-fresh timestamps, so a run verifies only URLs without a cached HTTP result
-(recorded failures never project and re-check on every run). With
---check-stale, real timestamps project, so lychee's max_cache_age and manual
-expires dates apply and stale entries are re-verified (the scheduled
-cache-refresh job's mode).
+By default staleness checks are not applied: cached 2xx results project with
+fresh timestamps, so a run verifies only URLs without a cached 2xx result
+(failure words and non-2xx results never serve as cache hits and re-check on
+every run). With --check-stale, real timestamps project, so lychee's
+max_cache_age and manual expires dates apply and stale entries are re-verified
+(the scheduled cache-refresh job's mode).
 
   --check-stale  apply staleness checks (re-verify stale and expired entries)
   --migrate      convert an existing ${CSV_FILE} to ${OWNED_FILE} and exit
