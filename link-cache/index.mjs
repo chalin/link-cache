@@ -447,7 +447,12 @@ while \`-p 5 -l 5\` lists the next 5 after pruning.
   -s, --summary         print a summary (counts, ages, result, via, histogram)
   -h, --help            show this help
 
-With no options, prints the summary. A flag may not be repeated.`;
+With no options, prints the summary. A flag may not be repeated. A --match
+scope shields out-of-scope entries from the operations, never from a prune's
+rewrite: they always survive intact.
+
+Exit codes: 0 success; 1 unreadable or malformed cache file; 2 usage error;
+3 staleness-guard breach.`;
 
 export function main(argv) {
   let args;

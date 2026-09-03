@@ -114,7 +114,9 @@ caches); a prune-driven rotation sizes the threshold to its full prune cycle
 instead. Run the guard where its failure gets seen (the refresh job itself, or
 another scheduled check). The guard ages lychee-owned entries by their check
 time, and expired manual seeds by their `expires` date; unexpired seeds and
-named-resolver entries are exempt (their lifecycle is owned elsewhere).
+named-resolver entries are exempt (their lifecycle is owned elsewhere). It also
+fails on evidence it can't trust: malformed cache lines, or a future-dated
+timestamp anywhere among the aged entries.
 
 Without a `link-cache.jsonc`, `lychee-norm-cache` falls back to the legacy mode:
 normalize the committed `.lycheecache` in place. To import an existing CSV
