@@ -921,7 +921,7 @@ test('--import fails without writing when the CSV has malformed lines', () => {
     assert.match(r.stderr, /malformed/, 'the error names the cause');
     assert.throws(
       () => readFileSync(join(site, 'link-cache.jsonc')),
-      'nothing is written on refusal',
+      'the owned cache remains absent after refusal',
     );
   } finally {
     rmSync(site, { recursive: true, force: true });
@@ -945,7 +945,7 @@ test('--import fails without writing when a status has no result mapping', () =>
     assert.equal(
       existsSync(join(site, 'link-cache.jsonc')),
       false,
-      'nothing is written on refusal',
+      'the owned cache remains absent after refusal',
     );
   } finally {
     rmSync(site, { recursive: true, force: true });

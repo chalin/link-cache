@@ -451,7 +451,7 @@ test('parseArgs rejects --match combined with --max-age', () => {
   assert.throws(
     () => parseArgs(['--max-age', '30', '-m', 'github']),
     /--max-age cannot be combined with --match/,
-    'order does not matter',
+    'the refusal is order-independent',
   );
 });
 
@@ -498,7 +498,7 @@ test('max-age exempts named-resolver entries', () => {
   const { guardFailed } = runOps(parsed, [{ kind: 'max-age', value: '5' }], {
     now: NOW,
   });
-  assert.equal(guardFailed, false, 'named-resolver age is not lane evidence');
+  assert.equal(guardFailed, false, 'named-resolver entries are exempt');
 });
 
 test('max-age counts an expired manual seed from its expiry date', () => {

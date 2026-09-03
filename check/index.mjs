@@ -252,7 +252,7 @@ function importCsv(cwd) {
   }
   if (unmappable) {
     return fail(
-      `${CSV_FILE} has ${unmappable} entr${unmappable === 1 ? 'y' : 'ies'} with an unmappable status (no result equivalent); fix or remove them, then rerun.`,
+      `${CSV_FILE} has ${unmappable} entr${unmappable === 1 ? 'y' : 'ies'} with an unmappable status or timestamp; fix or remove them, then rerun.`,
     );
   }
   writeFileAtomic(ownedPath, text);
