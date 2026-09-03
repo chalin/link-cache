@@ -117,10 +117,11 @@ time, and expired manual seeds by their `expires` date; unexpired seeds and
 named-resolver entries are exempt (their lifecycle is owned elsewhere).
 
 Without a `link-cache.jsonc`, `lychee-norm-cache` falls back to the legacy mode:
-normalize the committed `.lycheecache` in place. To migrate:
+normalize the committed `.lycheecache` in place. To import an existing CSV
+cache:
 
 ```sh
-npm run check:links -- --migrate   # .lycheecache -> link-cache.jsonc
+npm run check:links -- --import   # .lycheecache -> link-cache.jsonc
 ```
 
 then commit `link-cache.jsonc` and gitignore `.lycheecache`. If the CSV cache

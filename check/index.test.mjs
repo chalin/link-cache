@@ -884,14 +884,14 @@ test(
   },
 );
 
-// --- --migrate ---
+// --- --import ---
 
-test('--migrate converts .lycheecache to link-cache.jsonc', () => {
+test('--import converts .lycheecache to link-cache.jsonc', () => {
   const script = fileURLToPath(new URL('./index.mjs', import.meta.url));
   const site = mkdtempSync(join(tmpdir(), 'lnc-'));
   try {
     writeFileSync(join(site, '.lycheecache'), 'https://a.example/,200,100\n');
-    const r = spawnSync(process.execPath, [script, '--migrate'], {
+    const r = spawnSync(process.execPath, [script, '--import'], {
       cwd: site,
       encoding: 'utf8',
     });
@@ -903,7 +903,7 @@ test('--migrate converts .lycheecache to link-cache.jsonc', () => {
   }
 });
 
-test('--migrate fails without writing when the CSV has malformed lines', () => {
+test('--import fails without writing when the CSV has malformed lines', () => {
   // The migration is specified lossless: partial output would silently drop
   // committed data.
   const script = fileURLToPath(new URL('./index.mjs', import.meta.url));
@@ -913,11 +913,11 @@ test('--migrate fails without writing when the CSV has malformed lines', () => {
       join(site, '.lycheecache'),
       'https://a.example/,200,100\ngarbage-line\n',
     );
-    const r = spawnSync(process.execPath, [script, '--migrate'], {
+    const r = spawnSync(process.execPath, [script, '--import'], {
       cwd: site,
       encoding: 'utf8',
     });
-    assert.equal(r.status, 2, 'lossy migration is refused');
+    assert.equal(r.status, 2, 'lossy import is refused');
     assert.match(r.stderr, /malformed/, 'the error names the cause');
     assert.throws(
       () => readFileSync(join(site, 'link-cache.jsonc')),
@@ -928,7 +928,7 @@ test('--migrate fails without writing when the CSV has malformed lines', () => {
   }
 });
 
-test('--migrate fails without writing when a status has no result mapping', () => {
+test('--import fails without writing when a status has no result mapping', () => {
   // A lexically well-formed CSV row can still carry a status outside the
   // result domain (0, sub-100, 1000+); writing it would produce a file the
   // parser itself rejects.
@@ -936,11 +936,11 @@ test('--migrate fails without writing when a status has no result mapping', () =
   const site = mkdtempSync(join(tmpdir(), 'lnc-'));
   try {
     writeFileSync(join(site, '.lycheecache'), 'https://a.example/,0,100\n');
-    const r = spawnSync(process.execPath, [script, '--migrate'], {
+    const r = spawnSync(process.execPath, [script, '--import'], {
       cwd: site,
       encoding: 'utf8',
     });
-    assert.equal(r.status, 2, 'unmappable migration is refused');
+    assert.equal(r.status, 2, 'unmappable import is refused');
     assert.match(r.stderr, /unmappable/, 'the error names the cause');
     assert.equal(
       existsSync(join(site, 'link-cache.jsonc')),
@@ -952,13 +952,13 @@ test('--migrate fails without writing when a status has no result mapping', () =
   }
 });
 
-test('--migrate refuses to overwrite an existing link-cache.jsonc', () => {
+test('--import refuses to overwrite an existing link-cache.jsonc', () => {
   const script = fileURLToPath(new URL('./index.mjs', import.meta.url));
   const site = mkdtempSync(join(tmpdir(), 'lnc-'));
   try {
     writeFileSync(join(site, '.lycheecache'), 'https://a.example/,200,100\n');
     writeFileSync(join(site, 'link-cache.jsonc'), '{\n}\n');
-    const r = spawnSync(process.execPath, [script, '--migrate'], {
+    const r = spawnSync(process.execPath, [script, '--import'], {
       cwd: site,
       encoding: 'utf8',
     });

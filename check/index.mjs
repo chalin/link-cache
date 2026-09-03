@@ -42,7 +42,7 @@ export const EXIT_OK = 0;
 export const EXIT_DEAD_LINKS = 1;
 export const EXIT_PREFLIGHT = 2;
 
-const USAGE = `Usage: lychee-norm-cache [--check-stale] [--migrate] [lychee args...]
+const USAGE = `Usage: lychee-norm-cache [--check-stale] [--import] [lychee args...]
 
 Run lychee over this site's built ./public output. With a committed
 ${OWNED_FILE}, the ${CSV_FILE} handed to lychee is derived from it before the
@@ -58,7 +58,7 @@ max_cache_age and manual expires dates apply and stale entries are re-verified
 (the scheduled cache-refresh job's mode).
 
   --check-stale  apply staleness checks (re-verify stale and expired entries)
-  --migrate      convert an existing ${CSV_FILE} to ${OWNED_FILE} and exit
+  --import       convert an existing ${CSV_FILE} to ${OWNED_FILE} and exit
   -h, --help     show this help
 
 Exit codes: 0 success; 1 dead links; 2 preflight/sanity failure (missing
@@ -231,7 +231,7 @@ function fail(message) {
   return EXIT_PREFLIGHT;
 }
 
-function migrate(cwd) {
+function importCsv(cwd) {
   const csvPath = path.join(cwd, CSV_FILE);
   const ownedPath = path.join(cwd, OWNED_FILE);
   if (existsSync(ownedPath)) return fail(`${OWNED_FILE} already exists.`);
@@ -257,7 +257,7 @@ function migrate(cwd) {
   }
   writeFileAtomic(ownedPath, text);
   console.log(
-    `Migrated ${count} entries to ${OWNED_FILE}. Commit it and gitignore ${CSV_FILE}.`,
+    `Imported ${count} entries to ${OWNED_FILE}. Commit it and gitignore ${CSV_FILE}.`,
   );
   return EXIT_OK;
 }
@@ -269,7 +269,7 @@ function main(argv) {
   }
 
   const cwd = process.cwd();
-  if (argv.includes('--migrate')) return migrate(cwd);
+  if (argv.includes('--import')) return importCsv(cwd);
 
   // Wrapper-owned flag: consumed here, never forwarded to lychee.
   const checkStale = argv.includes('--check-stale');
