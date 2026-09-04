@@ -202,15 +202,6 @@ forwards (e.g. `--offline`, or `--max-cache-age` to override `lychee.toml` for
 one run; `0s` makes lychee discard the whole cache file by age, `expires`
 entries included).
 
-## Upgrading from 0.5.0
-
-- `lychee-norm-cache --check-stale` is gone: run unflagged; `max_cache_age`
-  governs every lane (lychee rejects the unknown flag).
-- `link-cache --max-age` and exit code 3 are gone: size `max_cache_age` per §
-  Recommended setup instead (the flag is a usage error).
-- Manual entries without `expires` now age and rotate; add `"expires": "never"`
-  where permanence was intended.
-
 ## Development
 
 The published CLIs have **zero runtime dependencies**; Prettier is the only dev
