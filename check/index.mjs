@@ -4,7 +4,7 @@
 // lychee's CSV .lycheecache derived from it. Falls back to legacy CSV-only
 // normalization when no owned cache exists. Run with `--help` for usage.
 //
-// When GITHUB_TOKEN is unset, a token is bridged from the gh CLI — lychee reads
+// When GITHUB_TOKEN is unset, a token is bridged from the gh CLI -- lychee reads
 // GITHUB_TOKEN, which also lifts the github.com rate limit; CI sets it directly.
 //
 // Exit codes: 0 success; 1 dead links; 2 preflight or sanity failure (lychee
@@ -50,10 +50,9 @@ run and folded back into it afterwards; otherwise ${CSV_FILE} is normalized in
 place (legacy mode). Bridges a GitHub token from the gh CLI when GITHUB_TOKEN
 isn't set; extra arguments pass through to lychee.
 
-Cached 2xx results project with their real timestamps, so lychee's
-max_cache_age governs them; an entry whose expires holds (a future date, or
-"never") projects fresh and is always served. Failure words and non-2xx
-results never serve as cache hits and re-check on every run.
+Cached 2xx results serve until lychee's max_cache_age says otherwise, unless
+the entry's expires holds (then it always serves); failure words and non-2xx
+results re-check on every run.
 
   --import       convert an existing ${CSV_FILE} to ${OWNED_FILE} and exit
   -h, --help     show this help
@@ -61,8 +60,8 @@ results never serve as cache hits and re-check on every run.
 Exit codes: 0 success; 1 dead links; 2 preflight/sanity failure (missing
 lychee or public/, lychee config or usage errors, zero links verified).
 
-Lychee's summary must reach stdout in its default or JSON format — it is the
-wrapper's proof that a check completed — so flags that divert or reshape
+Lychee's summary must reach stdout in its default or JSON format -- it is the
+wrapper's proof that a check completed -- so flags that divert or reshape
 stdout (--output, --format junit, --dump-inputs, ...) are unsupported here;
 run lychee directly for those.
 
@@ -80,7 +79,7 @@ export function resolveToken({ env = process.env, runGh = ghAuthToken } = {}) {
 
 // Sort .lycheecache by raw byte value (matching `LC_ALL=C sort`) and terminate
 // with a single newline, so lychee's nondeterministic cache writes diff cleanly.
-// Byte order via Buffer.compare — not JS string order, which compares UTF-16
+// Byte order via Buffer.compare -- not JS string order, which compares UTF-16
 // code units and can diverge from LC_ALL=C on non-ASCII URLs.
 export function sortCacheText(text) {
   const lines = text.split('\n');
@@ -113,7 +112,7 @@ function stripAnsi(s) {
   return s.replace(/\x1b\[[0-9;]*m/g, '');
 }
 
-// Check counts from lychee's stdout summary — the human line ("🔍 2 Total …
+// Check counts from lychee's stdout summary -- the human line ("🔍 2 Total …
 // ✅ 1 OK 🚫 0 Errors …") or --format json fields; null when neither is
 // present. A parsed summary is the proof that a check actually completed.
 export function parseSummary(stdout) {
@@ -133,7 +132,7 @@ export function parseSummary(stdout) {
 // Map lychee's exit code to ours (0 ok, 1 dead links, 2 preflight). A parsed
 // summary is required in every case: lychee exits 2 both for broken links and
 // for argument errors, and exits 0 from non-check modes (--dump-inputs) and
-// diverted-output runs (--output FILE, --format junit/detailed) — without the
+// diverted-output runs (--output FILE, --format junit/detailed) -- without the
 // summary there is no proof a check completed.
 export function mapLycheeExit(code, summary) {
   if (!summary) return EXIT_PREFLIGHT;
@@ -349,7 +348,7 @@ function main(argv) {
   }
 
   // A clean run in which nothing got a verdict is a false-clean (empty or
-  // fully-excluded public/), not a success — and folding it would mislabel
+  // fully-excluded public/), not a success -- and folding it would mislabel
   // unattempted entries as failed, so the check precedes the fold. Cache hits
   // count toward OK in lychee's summary, so a fully-cached run passes.
   if (status === EXIT_OK && summary && summary.ok + summary.errors === 0) {

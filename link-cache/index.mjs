@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 // The `link-cache` bin (deprecated alias: `refcache`): inspect and prune a
-// link cache — the owned JSONC cache (link-cache.jsonc) or a legacy Lychee CSV
+// link cache -- the owned JSONC cache (link-cache.jsonc) or a legacy Lychee CSV
 // (.lycheecache). Read-only unless `--prune` is given, and never hits the
 // network. Run with `--help` for usage.
 //
-// CSV line format: URL,STATUS,UNIX_TIMESTAMP — the URL is CSV-quoted when it
+// CSV line format: URL,STATUS,UNIX_TIMESTAMP -- the URL is CSV-quoted when it
 // contains a comma, so STATUS and TIMESTAMP are read from the final two fields.
 
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
@@ -158,7 +158,7 @@ export function computeStats(
 
 const pad2 = (n) => String(n).padStart(2, '0');
 
-// Local-time `YYYY-MM-DD HH:MM:SS ZONE` — entries minutes apart share a date, so
+// Local-time `YYYY-MM-DD HH:MM:SS ZONE` -- entries minutes apart share a date, so
 // the time disambiguates them. Shown in the user's timezone (with a short zone
 // label) to save them the UTC math.
 const localStamp = (ts) => {
@@ -281,7 +281,7 @@ export function runOps(
 
   let writeText = null;
   if (pruned > 0) {
-    // Survivors are all unpruned entries — including those outside the
+    // Survivors are all unpruned entries -- including those outside the
     // --match scope, which the scope only shields from ops, never from the
     // rewrite.
     const survivors = parsed.entries.filter((e) => !removed.has(e.index));

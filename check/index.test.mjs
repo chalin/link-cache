@@ -1,6 +1,6 @@
 // Tests for the Lychee check wrapper: pure helpers (token resolution, cache
 // normalization, summary parsing, exit mapping) and hermetic end-to-end runs
-// against a stub lychee binary — no network and no real lychee needed.
+// against a stub lychee binary -- no network and no real lychee needed.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -163,7 +163,7 @@ test(
   () => {
     // Sites often symlink public/ to a separate (diffable) git repo. The
     // /public/-anchored exclude_path patterns in lychee.toml only match if the
-    // path handed to lychee still ends in /public — resolving the symlink
+    // path handed to lychee still ends in /public -- resolving the symlink
     // would silently disable every exclusion.
     const dir = mkdtempSync(join(tmpdir(), 'lnc-'));
     try {
