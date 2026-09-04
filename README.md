@@ -55,7 +55,7 @@ Each entry records:
   seconds (`YYYY-MM-DDTHH:MM:SSZ`), converting exactly to and from lychee's
   epoch-seconds cache timestamps. The form is strict (no fractional seconds, no
   offsets), so timestamps are byte-comparable and lexicographically
-  chronological. A hand-written entry may omit it; the next check run dates it.
+  chronological. A `manual` entry may omit it; the next check run dates it.
 - **`via`**: the resolver that set the result, one of `lychee`, `manual`
   (hand-seeded), or a named specialized resolver (e.g. a browser-grade probe).
   Key hand-seeded entries by the URL exactly as lychee prints it: lowercase
