@@ -51,8 +51,8 @@ place (legacy mode). Bridges a GitHub token from the gh CLI when GITHUB_TOKEN
 isn't set; extra arguments pass through to lychee.
 
 Cached 2xx results serve until lychee's max_cache_age says otherwise, unless
-the entry's expires holds (then it always serves); failure words and non-2xx
-results re-check on every run.
+the entry has an expires (then it always serves; prune retires it once lapsed);
+failure words and non-2xx results re-check on every run.
 
   --import       convert an existing ${CSV_FILE} to ${OWNED_FILE} and exit
   -h, --help     show this help

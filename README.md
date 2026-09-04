@@ -66,14 +66,14 @@ Each entry records:
 - **`expires`** (optional, any entry): the per-entry override of lychee's
   `max_cache_age`. **Present, it governs; absent, `max_cache_age` governs.**
   Written as `YYYY-MM-DD` (valid through the end of that UTC day) or `never`;
-  `+Nd` (N days from now) is written back as a date on the next check run. While
-  it holds, the entry is served in every lane and skipped by an age-ordered
-  prune; `never` is permanent. Once the date passes, the next
-  `link-cache --prune` drops the entry, and the next check re-adds a live URL as
-  a plain `lychee` entry (or records a failure word). Seed 2xx results only; for
-  an expected non-2xx status, use `exclude` or `accept` instead. A `manual`
-  entry **without** `expires` ages and rotates like any other entry (0.4.x and
-  0.5.0 exempted every manual entry from pruning).
+  `+Nd` (N days from now) is written back as a date on the next check run. With
+  `expires` set, the entry is served in every lane; while the date holds (or
+  forever, with `never`) it is also exempt from age-ordered pruning. Once the
+  date passes, the next `link-cache --prune` drops the entry, and the next check
+  re-adds a live URL as a plain `lychee` entry (or records a failure word). Seed
+  2xx results only; for an expected non-2xx status, use `exclude` or `accept`
+  instead. A `manual` entry **without** `expires` ages and rotates like any
+  other entry (0.4.x and 0.5.0 exempted every manual entry from pruning).
 
 Lychee's own CSV cache, `.lycheecache`, is **derived**: `lychee-norm-cache`
 projects the owned cache into it before each run and folds lychee's results back
@@ -199,7 +199,17 @@ npm run link-cache -- --prune 0  # drop only entries whose expires has lapsed
 any extra arguments to lychee. Run either tool with `--help` for its full
 options, and `lychee --help` for the link-checking flags `lychee-norm-cache`
 forwards (e.g. `--offline`, or `--max-cache-age` to override `lychee.toml` for
-one run).
+one run; `0s` makes lychee discard the whole cache file by age, `expires`
+entries included).
+
+## Upgrading from 0.5.0
+
+- `lychee-norm-cache --check-stale` is gone: run unflagged; `max_cache_age`
+  governs every lane (lychee rejects the unknown flag).
+- `link-cache --max-age` and exit code 3 are gone: size `max_cache_age` per §
+  Recommended setup instead (the flag is a usage error).
+- Manual entries without `expires` now age and rotate; add `"expires": "never"`
+  where permanence was intended.
 
 ## Development
 

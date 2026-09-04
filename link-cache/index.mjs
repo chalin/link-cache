@@ -365,8 +365,8 @@ const USAGE = `Usage: link-cache [CACHE_FILE] [options]
 Inspect and prune a link cache: the owned ${OWNED_FILE} (default when present)
 or a legacy Lychee CSV like ${CSV_FILE}. Options run in the order given, over
 the evolving cache, so \`-l 5 -p 5\` lists the 5 oldest before pruning (rows
-marked \`expires\` are exempt and stay), while \`-p 5 -l 5\` lists the next 5
-after pruning.
+whose \`expires\` still holds are exempt and stay; lapsed ones go first), while
+\`-p 5 -l 5\` lists the next 5 after pruning.
 
   -l, --list NUM        list the NUM oldest entries (with their expires, if any)
   -m, --match REGEX     scope all operations to URLs matching REGEX

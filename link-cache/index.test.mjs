@@ -266,7 +266,7 @@ test('runOps without a prune does not rewrite the file', () => {
   const { writeText, pruned } = runOps(parsed, [{ kind: 'summary' }], {
     now: NOW,
   });
-  assert.equal(pruned, 0, 'nothing pruned');
+  assert.equal(pruned, 0, 'the prune count is zero');
   assert.equal(writeText, null, 'writeText stays null when nothing changed');
 });
 
@@ -415,8 +415,8 @@ test('prune with nothing lapsed and --prune 0 rewrites nothing', () => {
     [{ kind: 'prune', value: '0' }],
     { now: NOW },
   );
-  assert.equal(pruned, 0, 'nothing pruned');
-  assert.equal(writeText, null, 'no rewrite');
+  assert.equal(pruned, 0, 'the prune count is zero');
+  assert.equal(writeText, null, 'writeText stays null');
 });
 
 test('list shows each entry expiry, so a prune preview reads honestly', () => {
@@ -429,7 +429,7 @@ test('list shows each entry expiry, so a prune preview reads honestly', () => {
   const rows = output.split('\n').slice(1);
   assert.match(rows[0], /never\.example\/\s+expires never$/, 'never shown');
   assert.match(rows[1], /holds\.example\/\s+expires 2002-01-01$/, 'date shown');
-  assert.match(rows[2], /old\.example\/$/, 'no expires, no column');
+  assert.match(rows[2], /old\.example\/$/, 'the row ends at the URL');
 });
 
 // --- --match scoping ---

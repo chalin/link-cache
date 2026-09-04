@@ -655,7 +655,7 @@ test(
 );
 
 test(
-  'the projection hands lychee real timestamps unless expires overrides',
+  'the projection hands lychee real timestamps unless the entry has expires',
   { skip: WIN_SKIP },
   () => {
     // The stub leaves the projected CSV untouched (csvAfterRun unset), so the
@@ -671,6 +671,12 @@ test(
     "when": "2020-01-01T00:00:00Z",
     "via": "lychee",
     "expires": "never",
+  },
+  "https://c.example/": {
+    "result": 200,
+    "when": "2020-01-01T00:00:00Z",
+    "via": "manual",
+    "expires": "2020-06-30",
   },
 }
 `;
@@ -692,10 +698,14 @@ test(
         realTs,
         'no expires: the real ts, so max_cache_age governs',
       );
-      const b = rows.get('https://b.example/');
+      const isFresh = (ts) => ts > realTs && ts * 1000 <= Date.now() + 1000;
       assert.ok(
-        b > realTs && b * 1000 <= Date.now() + 1000,
+        isFresh(rows.get('https://b.example/')),
         'expires never: a fresh ts, so lychee always serves it',
+      );
+      assert.ok(
+        isFresh(rows.get('https://c.example/')),
+        'lapsed expires: still fresh, prune retires it',
       );
     } finally {
       rmSync(site, { recursive: true, force: true });
