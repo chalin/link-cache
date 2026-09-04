@@ -1,34 +1,32 @@
 #!/usr/bin/env node
-// The `link-cache` bin (deprecated alias: `refcache`): inspect and prune a
-// link cache — the owned JSONC cache (link-cache.jsonc) or a legacy Lychee CSV
-// (.lycheecache). Read-only unless `--prune` is given, and never hits the
-// network. Run with `--help` for usage.
-//
-// CSV line format: URL,STATUS,UNIX_TIMESTAMP — the URL is CSV-quoted when it
-// contains a comma, so STATUS and TIMESTAMP are read from the final two fields.
+// The `link-cache` bin (deprecated alias: `refcache`): inspect and prune the
+// owned JSONC cache (link-cache.jsonc) or a legacy Lychee CSV (.lycheecache).
+// Writes only on `--prune`, never hits the network. Run with `--help` for
+// usage.
 
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import {
   CSV_FILE,
+  DAY,
   OWNED_FILE,
   csvUnquote,
+  hasLapsed,
   parseOwned,
   serializeOwned,
 } from '../lib/cache.mjs';
 import { writeFileAtomic } from '../lib/write.mjs';
 
-const DAY = 86400;
 const BUCKET_COUNT = 5;
 
 // --- parsing ---------------------------------------------------------------
 
 // Parse one URL,STATUS,TIMESTAMP line; null when malformed. Lexically strict:
-// junk rows must count as malformed (the staleness guard fails on them)
-// rather than pass as entries. Quote-grammar validation delegates to lib's
-// csvUnquote; the URL keeps its raw (possibly quoted) spelling because prune
-// rewrites lines byte-for-byte.
+// junk rows count as malformed (reported in the summary) rather than pass as
+// entries. Quote-grammar validation delegates to lib's csvUnquote; the URL
+// keeps its raw (possibly quoted) spelling because prune rewrites lines
+// byte-for-byte.
 function parseLine(raw) {
   const lastComma = raw.lastIndexOf(',');
   if (lastComma < 0) return null;
@@ -64,8 +62,11 @@ export function parseCache(text) {
 }
 
 // Adapt the owned JSONC cache to the same entry shape (string status, index).
-export function parseOwnedCache(text) {
-  const owned = parseOwned(text);
+// `normalized` flags a read that changed the file's canonical text (sugar
+// resolved, a `when` defaulted, a legacy field migrated, formatting), so a
+// prune can persist it even when it drops nothing.
+export function parseOwnedCache(text, { now = Date.now() / 1000 } = {}) {
+  const owned = parseOwned(text, { now });
   const entries = owned.entries.map((e, index) => ({
     url: e.url,
     status: String(e.result),
@@ -74,7 +75,8 @@ export function parseOwnedCache(text) {
     index,
     src: e,
   }));
-  return { kind: 'owned', owned, entries, malformed: 0 };
+  const normalized = serializeOwned(owned) !== text;
+  return { kind: 'owned', owned, entries, malformed: 0, normalized };
 }
 
 // --- selection / pruning ---------------------------------------------------
@@ -157,7 +159,7 @@ export function computeStats(
 
 const pad2 = (n) => String(n).padStart(2, '0');
 
-// Local-time `YYYY-MM-DD HH:MM:SS ZONE` — entries minutes apart share a date, so
+// Local-time `YYYY-MM-DD HH:MM:SS ZONE`: entries minutes apart share a date, so
 // the time disambiguates them. Shown in the user's timezone (with a short zone
 // label) to save them the UTC math.
 const localStamp = (ts) => {
@@ -181,7 +183,11 @@ export function formatList(entries, n, { now = Date.now() / 1000 } = {}) {
   const rows = chosen.map((e) => {
     const ageDays = Math.floor((now - e.ts) / DAY);
     const via = e.via !== undefined ? `  ${e.via}` : '';
-    return `  ${localStamp(e.ts)}  ${String(ageDays).padStart(4)}d  ${e.status}${via}  ${displayUrl(e.url)}`;
+    const expires =
+      e.src?.expires === undefined
+        ? ''
+        : `  expires ${e.src.expires}${hasLapsed(e.src.expires, now) ? ' (lapsed)' : ''}`;
+    return `  ${localStamp(e.ts)}  ${String(ageDays).padStart(4)}d  ${e.status}${via}  ${displayUrl(e.url)}${expires}`;
   });
   return [head, ...rows].join('\n');
 }
@@ -241,7 +247,6 @@ export function runOps(
 ) {
   const removed = new Set();
   let pruned = 0;
-  let guardFailed = false;
   const out = [];
   // Match against the unquoted URL: legacy-CSV entries carry the raw
   // (possibly CSV-quoted) field, which would defeat anchored regexes.
@@ -253,74 +258,20 @@ export function runOps(
     if (op.kind === 'list') {
       out.push(formatList(current(), Number(op.value), { now }));
     } else if (op.kind === 'prune') {
-      // Manual entries are exempt: pruning schedules re-checks for
-      // lychee-verified entries, while a manual entry's lifecycle is owned by
-      // its author and its `expires` date — and under prune-refresh rotation
-      // re-confirmed seeds keep their original timestamp, so they'd otherwise
-      // age to the front and get evicted mid-lifecycle.
-      const cur = current().filter((e) => e.via !== 'manual');
-      const k = resolvePruneCount(op.value, cur.length);
-      for (const victim of selectOldest(cur, k)) removed.add(victim.index);
-      pruned += k;
-      out.push(
-        `Pruned ${k} oldest ${k === 1 ? 'entry' : 'entries'} (${cur.length} → ${cur.length - k}).`,
-      );
-    } else if (op.kind === 'max-age') {
-      // Staleness guard: with staleness checks off by default in
-      // lychee-norm-cache, a dead refresh job rots the cache silently; an
-      // entry aging past the threshold is the signal. Refreshable entries are
-      // the lychee-owned ones (via-less legacy CSV entries included), aged by
-      // their check time, plus expired manual seeds, aged from their expiry
-      // date (a live refresh job replaces them within a rotation). Unexpired
-      // and no-expires seeds and named-resolver entries are exempt: their
-      // timestamps never refresh on re-confirmation, so their age says
-      // nothing about the refresh job.
-      const limit = Number(op.value);
-      if (parsed.malformed > 0) {
-        guardFailed = true;
-        out.push(
-          `Staleness guard: ${parsed.malformed} malformed line(s); the cache's age cannot be trusted.`,
-        );
-      } else {
-        const candidates = [];
-        for (const e of current()) {
-          if (e.via === undefined || e.via === 'lychee') {
-            candidates.push({ url: e.url, ts: e.ts });
-          } else if (e.via === 'manual' && e.src?.expires !== undefined) {
-            const cutoff = Date.parse(`${e.src.expires}T23:59:59Z`) / 1000;
-            if (now > cutoff) candidates.push({ url: e.url, ts: cutoff });
-          }
-        }
-        // Corrupt evidence anywhere in the candidate set poisons the verdict:
-        // a single oldest-entry probe would let any past entry mask a
-        // future-dated one.
-        const future = candidates.find((c) => c.ts > now);
-        const oldest = candidates.sort((a, b) => a.ts - b.ts)[0];
-        if (future) {
-          guardFailed = true;
-          out.push(
-            `Staleness guard: future-dated timestamp on ${displayUrl(future.url)}; the cache's age cannot be trusted.`,
-          );
-        } else if (!oldest) {
-          out.push('Staleness guard: no refreshable entries; nothing to age.');
-        } else {
-          const ageDays = Math.floor((now - oldest.ts) / DAY);
-          if (now - oldest.ts > limit * DAY) {
-            guardFailed = true;
-            out.push(
-              `Staleness guard: oldest refreshable entry is ${ageDays}d old, ` +
-                `exceeds --max-age ${limit}d:\n  ${displayUrl(oldest.url)}\n` +
-                'Is the cache-refresh job running? If the URL has left the ' +
-                'site, its entry never re-checks: prune it (--match URL --prune 1).',
-            );
-          } else {
-            out.push(
-              `Staleness guard: oldest refreshable entry is ${ageDays}d old ` +
-                `(within --max-age ${limit}d).`,
-            );
-          }
-        }
+      // Lapsed `expires` go first, unconditionally, so `--prune 0` means
+      // "lapsed only"; holding ones are exempt; the rest compete on age.
+      const cur = current();
+      const lapsed = cur.filter((e) => hasLapsed(e.src?.expires, now));
+      const eligible = cur.filter((e) => e.src?.expires === undefined);
+      const k = resolvePruneCount(op.value, eligible.length);
+      for (const victim of [...lapsed, ...selectOldest(eligible, k)]) {
+        removed.add(victim.index);
       }
+      const n = lapsed.length + k;
+      pruned += n;
+      out.push(
+        `Pruned ${n} ${n === 1 ? 'entry' : 'entries'}: ${lapsed.length} lapsed, ${k} oldest (${cur.length} → ${cur.length - n}).`,
+      );
     } else if (op.kind === 'summary') {
       const stats = computeStats(current(), {
         now,
@@ -332,10 +283,12 @@ export function runOps(
   }
 
   let writeText = null;
-  if (pruned > 0) {
-    // Survivors are all unpruned entries — including those outside the
-    // --match scope, which the scope only shields from ops, never from the
-    // rewrite.
+  const didPrune = ops.some((op) => op.kind === 'prune');
+  if (pruned > 0 || (didPrune && parsed.normalized)) {
+    // Survivors are all unpruned entries, including those outside the --match
+    // scope (the scope shields entries from ops, never from the rewrite). A prune that drops nothing still persists a read that
+    // normalized the file (resolved sugar, defaulted `when`): otherwise a
+    // committed "+0d" re-resolves to "today" on every prune day.
     const survivors = parsed.entries.filter((e) => !removed.has(e.index));
     if (parsed.kind === 'owned') {
       // Comments of surviving entries travel with them; pruned entries take
@@ -348,7 +301,7 @@ export function runOps(
       writeText = parsed.lines.filter((_, i) => !removed.has(i)).join('\n');
     }
   }
-  return { output: out.join('\n\n'), writeText, pruned, guardFailed };
+  return { output: out.join('\n\n'), writeText, pruned };
 }
 
 // --- CLI -------------------------------------------------------------------
@@ -360,7 +313,6 @@ const FLAGS = new Map([
   ['--match', 'match'],
   ['-p', 'prune'],
   ['--prune', 'prune'],
-  ['--max-age', 'max-age'],
   ['-s', 'summary'],
   ['--summary', 'summary'],
 ]);
@@ -402,21 +354,12 @@ export function parseArgs(argv) {
       if (kind === 'prune' && !/^\d+%?$/.test(value)) {
         throw new Error(`--prune needs NUM or NUM%, got: ${value}`);
       }
-      if (kind === 'max-age' && !/^\d+$/.test(value)) {
-        throw new Error(`--max-age needs a day count, got: ${value}`);
-      }
       ops.push({ kind, value });
       continue;
     }
     if (a.startsWith('-')) throw new Error(`unknown flag: ${a}`);
     if (path !== null) throw new Error(`unexpected extra argument: ${a}`);
     path = a;
-  }
-
-  // Scoping the staleness backstop to a URL subset would silently blind it
-  // to unmatched rot; refuse rather than pick a winner.
-  if (match && ops.some((op) => op.kind === 'max-age')) {
-    throw new Error('--max-age cannot be combined with --match');
   }
 
   return { ops, path, match, help };
@@ -426,16 +369,17 @@ const USAGE = `Usage: link-cache [CACHE_FILE] [options]
 
 Inspect and prune a link cache: the owned ${OWNED_FILE} (default when present)
 or a legacy Lychee CSV like ${CSV_FILE}. Options run in the order given, over
-the evolving cache, so \`-l 5 -p 5\` lists the 5 oldest about to be pruned,
-while \`-p 5 -l 5\` lists the next 5 after pruning.
+the evolving cache, so \`-l 5 -p 5\` lists the 5 oldest by timestamp before
+pruning (a prune drops rows marked \`(lapsed)\` first and spares the other
+\`expires\` rows), while \`-p 5 -l 5\` lists the next 5 after pruning.
 
-  -l, --list NUM        list the NUM oldest entries
-  -m, --match REGEX     scope all operations except --max-age to URLs matching
-                        REGEX (the guard refuses the combination)
-      --max-age DAYS    staleness guard: fail (exit 3) when the oldest
-                        refreshable entry is older than DAYS days
-  -p, --prune NUM[%]    drop the NUM (or NUM%) oldest non-manual entries, then
-                        rewrite (manual entries retire via their expires date)
+  -l, --list NUM        list the NUM oldest entries (with their expires, if any)
+  -m, --match REGEX     scope all operations to URLs matching REGEX
+  -p, --prune NUM[%]    drop every in-scope entry whose expires has lapsed, then
+                        the NUM oldest without an expires (NUM% of those), and
+                        rewrite; entries whose expires holds are exempt
+                        (\`--prune 0\` drops lapsed entries only; a prune also
+                        writes back any normalization the read applied)
   -s, --summary         print a summary (counts, ages, result, via, histogram)
   -h, --help            show this help
 
@@ -443,8 +387,7 @@ With no options, prints the summary. A flag may not be repeated. A --match
 scope shields out-of-scope entries from the operations, never from a prune's
 rewrite: they always survive intact.
 
-Exit codes: 0 success; 1 unreadable or malformed cache file; 2 usage error;
-3 staleness-guard breach.`;
+Exit codes: 0 success; 1 unreadable or malformed cache file; 2 usage error.`;
 
 export function main(argv) {
   let args;
@@ -470,18 +413,18 @@ export function main(argv) {
     process.exit(1);
   }
 
+  const now = Date.now() / 1000;
   const isOwned = path.endsWith('.jsonc') || text.trimStart().startsWith('{');
   let parsed;
   try {
-    parsed = isOwned ? parseOwnedCache(text) : parseCache(text);
+    parsed = isOwned ? parseOwnedCache(text, { now }) : parseCache(text);
   } catch (err) {
     console.error(`[error] ${err.message}`);
     process.exit(1);
   }
 
-  const now = Date.now() / 1000;
   const ops = args.ops.length ? args.ops : [{ kind: 'summary' }];
-  const { output, writeText, guardFailed } = runOps(parsed, ops, {
+  const { output, writeText } = runOps(parsed, ops, {
     now,
     path,
     match: args.match,
@@ -489,7 +432,6 @@ export function main(argv) {
 
   if (output) console.log(output);
   if (writeText !== null) writeFileAtomic(path, writeText);
-  if (guardFailed) process.exit(3);
 }
 
 // Real-path compare, not `file://${argv[1]}`: npm links bins as symlinks, so

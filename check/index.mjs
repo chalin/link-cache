@@ -1,14 +1,11 @@
 #!/usr/bin/env node
-// The `lychee-norm-cache` bin: run lychee over a built site, maintained around
-// an owned JSONC cache (link-cache.jsonc, the committed source of truth) with
-// lychee's CSV .lycheecache derived from it. Falls back to legacy CSV-only
-// normalization when no owned cache exists. Run with `--help` for usage.
+// The `lychee-norm-cache` bin: run lychee over a built site around the owned
+// JSONC cache (link-cache.jsonc), deriving lychee's CSV from it and folding
+// results back; without an owned cache, normalize the CSV in place. Run with
+// `--help` for usage and exit codes.
 //
-// When GITHUB_TOKEN is unset, a token is bridged from the gh CLI — lychee reads
+// When GITHUB_TOKEN is unset, a token is bridged from the gh CLI: lychee reads
 // GITHUB_TOKEN, which also lifts the github.com rate limit; CI sets it directly.
-//
-// Exit codes: 0 success; 1 dead links; 2 preflight or sanity failure (lychee
-// or public/ missing, zero links checked, lychee config error).
 
 import { spawnSync } from 'node:child_process';
 import {
@@ -42,7 +39,7 @@ export const EXIT_OK = 0;
 export const EXIT_DEAD_LINKS = 1;
 export const EXIT_PREFLIGHT = 2;
 
-const USAGE = `Usage: lychee-norm-cache [--check-stale] [--import] [lychee args...]
+const USAGE = `Usage: lychee-norm-cache [--import] [lychee args...]
 
 Run lychee over this site's built ./public output. With a committed
 ${OWNED_FILE}, the ${CSV_FILE} handed to lychee is derived from it before the
@@ -50,22 +47,18 @@ run and folded back into it afterwards; otherwise ${CSV_FILE} is normalized in
 place (legacy mode). Bridges a GitHub token from the gh CLI when GITHUB_TOKEN
 isn't set; extra arguments pass through to lychee.
 
-By default staleness checks are not applied: cached 2xx results project with
-fresh timestamps, so a run verifies only URLs without a cached 2xx result
-(failure words and non-2xx results never serve as cache hits and re-check on
-every run). With --check-stale, real timestamps project, so lychee's
-max_cache_age and manual expires dates apply and stale entries are re-verified
-(the scheduled cache-refresh job's mode).
+Cached 2xx results serve until lychee's max_cache_age says otherwise, unless
+the entry has an expires (then it always serves; prune retires it once lapsed);
+failure words and non-2xx results re-check on every run.
 
-  --check-stale  apply staleness checks (re-verify stale and expired entries)
   --import       convert an existing ${CSV_FILE} to ${OWNED_FILE} and exit
   -h, --help     show this help
 
 Exit codes: 0 success; 1 dead links; 2 preflight/sanity failure (missing
 lychee or public/, lychee config or usage errors, zero links verified).
 
-Lychee's summary must reach stdout in its default or JSON format — it is the
-wrapper's proof that a check completed — so flags that divert or reshape
+Lychee's summary must reach stdout in its default or JSON format: it is the
+wrapper's proof that a check completed. Flags that divert or reshape
 stdout (--output, --format junit, --dump-inputs, ...) are unsupported here;
 run lychee directly for those.
 
@@ -83,8 +76,8 @@ export function resolveToken({ env = process.env, runGh = ghAuthToken } = {}) {
 
 // Sort .lycheecache by raw byte value (matching `LC_ALL=C sort`) and terminate
 // with a single newline, so lychee's nondeterministic cache writes diff cleanly.
-// Byte order via Buffer.compare — not JS string order, which compares UTF-16
-// code units and can diverge from LC_ALL=C on non-ASCII URLs.
+// Byte order via Buffer.compare, not JS string order: the latter compares
+// UTF-16 code units and can diverge from LC_ALL=C on non-ASCII URLs.
 export function sortCacheText(text) {
   const lines = text.split('\n');
   if (lines.length && lines[lines.length - 1] === '') lines.pop();
@@ -116,8 +109,8 @@ function stripAnsi(s) {
   return s.replace(/\x1b\[[0-9;]*m/g, '');
 }
 
-// Check counts from lychee's stdout summary — the human line ("🔍 2 Total …
-// ✅ 1 OK 🚫 0 Errors …") or --format json fields; null when neither is
+// Check counts from lychee's stdout summary, either the human line ("🔍 2 Total
+// … ✅ 1 OK 🚫 0 Errors …") or --format json fields; null when neither is
 // present. A parsed summary is the proof that a check actually completed.
 export function parseSummary(stdout) {
   stdout = stripAnsi(stdout);
@@ -136,7 +129,7 @@ export function parseSummary(stdout) {
 // Map lychee's exit code to ours (0 ok, 1 dead links, 2 preflight). A parsed
 // summary is required in every case: lychee exits 2 both for broken links and
 // for argument errors, and exits 0 from non-check modes (--dump-inputs) and
-// diverted-output runs (--output FILE, --format junit/detailed) — without the
+// diverted-output runs (--output FILE, --format junit/detailed). Without the
 // summary there is no proof a check completed.
 export function mapLycheeExit(code, summary) {
   if (!summary) return EXIT_PREFLIGHT;
@@ -271,10 +264,6 @@ function main(argv) {
   const cwd = process.cwd();
   if (argv.includes('--import')) return importCsv(cwd);
 
-  // Wrapper-owned flag: consumed here, never forwarded to lychee.
-  const checkStale = argv.includes('--check-stale');
-  argv = argv.filter((a) => a !== '--check-stale');
-
   if (!hasLychee()) {
     return fail(`lychee not found. Install: ${INSTALL_HINT}`);
   }
@@ -284,12 +273,12 @@ function main(argv) {
     return fail(`${path.join(cwd, 'public')} not found. Build the site first.`);
   }
 
+  const now = Date.now() / 1000;
   const ownedPath = path.join(cwd, OWNED_FILE);
   const cachePath = path.join(cwd, CSV_FILE);
   const owned = existsSync(ownedPath)
-    ? parseOwned(readFileSync(ownedPath, 'utf8'))
+    ? parseOwned(readFileSync(ownedPath, 'utf8'), { now })
     : null;
-  const now = Date.now() / 1000;
 
   // The owned-cache lens requires lychee's cache; enforce rather than let a
   // cacheless run erase every projected entry on merge-back.
@@ -299,26 +288,13 @@ function main(argv) {
   if (owned && argv.includes('--cache=false')) {
     return fail(`--cache=false is incompatible with ${OWNED_FILE}.`);
   }
-  // A forwarded cache-age flag is either inert (the fresh-timestamp
-  // projection defeats any realistic value) or, near zero, discards the
-  // just-written cache wholesale via lychee's file-age check; either way it
-  // contradicts the flag's intent, and --check-stale is the sanctioned
-  // re-check path.
-  const hasCacheAgeFlag = argv.some(
-    (a) => a === '--max-cache-age' || a.startsWith('--max-cache-age='),
-  );
-  if (owned && !checkStale && hasCacheAgeFlag) {
-    return fail(
-      '--max-cache-age has no effect on cached entries in the default mode; use --check-stale to re-verify stale entries.',
-    );
-  }
   const cacheArgs = hasCacheFlag ? [] : ['--cache'];
 
   // Derive the CSV lychee will read from the owned cache; keep the projected
   // timestamps so merge-back can tell echoed cache hits from real re-checks.
   let projectedTs = new Map();
   if (owned) {
-    const projected = projectToCsv(owned.entries, { now, checkStale });
+    const projected = projectToCsv(owned.entries, { now });
     projectedTs = new Map(projected.map((e) => [e.url, e.ts]));
     writeFileAtomic(cachePath, serializeCsv(projected));
   }
@@ -348,8 +324,8 @@ function main(argv) {
   if (run.stdout) process.stdout.write(run.stdout);
 
   // A failed or verdict-free run never folds; remove the derived CSV rather
-  // than leave it behind (the projection's fresh timestamps are a lie about
-  // recency once no completed run consumed them).
+  // than leave it behind (a projection no completed run consumed is not a
+  // cache state to keep).
   const bail = (message) => {
     if (owned) rmSync(cachePath, { force: true });
     return fail(message);
@@ -369,7 +345,7 @@ function main(argv) {
   }
 
   // A clean run in which nothing got a verdict is a false-clean (empty or
-  // fully-excluded public/), not a success — and folding it would mislabel
+  // fully-excluded public/), not a success; folding it would mislabel
   // unattempted entries as failed, so the check precedes the fold. Cache hits
   // count toward OK in lychee's summary, so a fully-cached run passes.
   if (status === EXIT_OK && summary && summary.ok + summary.errors === 0) {

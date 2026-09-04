@@ -1,6 +1,6 @@
 // Tests for the Lychee check wrapper: pure helpers (token resolution, cache
 // normalization, summary parsing, exit mapping) and hermetic end-to-end runs
-// against a stub lychee binary — no network and no real lychee needed.
+// against a stub lychee binary (no network and no real lychee needed).
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -39,13 +39,17 @@ const SUMMARY_1OK = '🔍 1 Total (in 1ms) 🔗 1 Unique ✅ 1 OK 🚫 0 Errors'
 
 // A scratch site with a stub `lychee` on PATH whose behavior the test scripts:
 // `stdout`/`exit` set the stub's output and status, `csv` pre-seeds the cache
-// lychee would leave behind (written post-invocation via a marker copy).
+// lychee would leave behind (written post-invocation via a marker copy). The
+// stub records its argv in `lychee-args` (one per line) for forwarding checks.
 function makeSite({ stdout = '', exit = 0, csvAfterRun = null } = {}) {
   const site = mkdtempSync(join(tmpdir(), 'lnc-'));
   const bin = join(site, 'stub-bin');
   mkdirSync(bin);
   mkdirSync(join(site, 'public'));
-  const lines = ['#!/bin/sh'];
+  const lines = [
+    '#!/bin/sh',
+    `printf '%s\\n' "$@" > ${JSON.stringify(join(site, 'lychee-args'))}`,
+  ];
   if (csvAfterRun !== null) {
     lines.push(`cp ${JSON.stringify(join(site, 'csv-after'))} .lycheecache`);
     writeFileSync(join(site, 'csv-after'), csvAfterRun);
@@ -71,6 +75,9 @@ function runWrapper(site, args = []) {
     },
   });
 }
+
+const lycheeArgs = (site) =>
+  readFileSync(join(site, 'lychee-args'), 'utf8').trim().split('\n');
 
 // --- resolveToken ---
 
@@ -154,10 +161,7 @@ test(
   'publicDirOf keeps the lexical path when public is a symlink',
   { skip: process.platform === 'win32' ? 'POSIX symlinks only' : false },
   () => {
-    // Sites often symlink public/ to a separate (diffable) git repo. The
-    // /public/-anchored exclude_path patterns in lychee.toml only match if the
-    // path handed to lychee still ends in /public — resolving the symlink
-    // would silently disable every exclusion.
+    // Input: public/ as a symlink; rationale at publicDirOf.
     const dir = mkdtempSync(join(tmpdir(), 'lnc-'));
     try {
       const target = join(dir, 'site.g');
@@ -542,10 +546,7 @@ test(
   'a preflight failure leaves the owned cache untouched and clears the derived CSV',
   { skip: WIN_SKIP },
   () => {
-    // Under the default fresh-ts projection a run that never happened must not
-    // fold: the projected entries would be mislabeled as failed. The derived
-    // CSV is removed: it carries the projection's fresh timestamps, a lie
-    // about recency once no run consumed it.
+    // Input: a preflight failure after the projection was written.
     const site = makeSite({ stdout: 'error: bad usage', exit: 2 });
     writeFileSync(join(site, 'link-cache.jsonc'), OWNED_WITH_EXPIRED);
     try {
@@ -626,66 +627,20 @@ test(
 );
 
 test(
-  'default mode rejects forwarded cache-age flags',
+  'forwarded cache-age flags pass through to lychee',
   { skip: WIN_SKIP },
   () => {
-    // Lychee discards the whole cache by FILE age before reading row
-    // timestamps (verified live: "Cache is too old (age: 0s, max age: 0s)"),
-    // so fresh row projection cannot neutralize a forwarded --max-cache-age;
-    // the sanctioned re-check path is --check-stale.
     const owned =
       '{\n  "https://a.example/": {\n    "result": 200,\n    "when": "2020-01-01T00:00:00Z",\n    "via": "lychee",\n  },\n}\n';
-    for (const args of [['--max-cache-age', '0s'], ['--max-cache-age=0s']]) {
+    for (const args of [['--max-cache-age', '90d'], ['--max-cache-age=90d']]) {
       const site = makeSite({ stdout: SUMMARY_1OK, exit: 0 });
       writeFileSync(join(site, 'link-cache.jsonc'), owned);
       try {
         const r = runWrapper(site, args);
-        assert.equal(r.status, 2, `default mode rejects ${args.join(' ')}`);
-        assert.match(r.stderr, /--check-stale/, 'the error names the remedy');
-      } finally {
-        rmSync(site, { recursive: true, force: true });
-      }
-    }
-    // Under --check-stale the flag is meaningful and passes through.
-    const site = makeSite({ stdout: SUMMARY_1OK, exit: 0 });
-    writeFileSync(join(site, 'link-cache.jsonc'), owned);
-    try {
-      const r = runWrapper(site, ['--check-stale', '--max-cache-age', '90d']);
-      assert.equal(r.status, 0, 'check-stale forwards cache-age flags');
-    } finally {
-      rmSync(site, { recursive: true, force: true });
-    }
-  },
-);
-
-test(
-  'default run projects fresh timestamps; --check-stale projects real ones',
-  { skip: WIN_SKIP },
-  () => {
-    // The stub leaves the projected CSV untouched (csvAfterRun unset), so the
-    // post-run .lycheecache shows what lychee was handed.
-    const owned =
-      '{\n  "https://a.example/": {\n    "result": 200,\n    "when": "2020-01-01T00:00:00Z",\n    "via": "lychee",\n  },\n}\n';
-    const realTs = 1577836800; // 2020-01-01T00:00:00Z
-
-    for (const [args, wantReal] of [
-      [[], false],
-      [['--check-stale'], true],
-    ]) {
-      const site = makeSite({ stdout: SUMMARY_1OK, exit: 0 });
-      writeFileSync(join(site, 'link-cache.jsonc'), owned);
-      try {
-        const r = runWrapper(site, args);
-        assert.equal(r.status, 0, `run succeeds (${args})`);
-        const csv = readFileSync(join(site, '.lycheecache'), 'utf8');
-        const ts = Number(csv.trim().split(',').pop());
-        if (wantReal) {
-          assert.equal(ts, realTs, '--check-stale hands lychee the real ts');
-        } else {
-          assert.ok(
-            ts > realTs && ts * 1000 <= Date.now() + 1000,
-            'the default hands lychee a fresh ts',
-          );
+        assert.equal(r.status, 0, `${args.join(' ')} is accepted`);
+        const got = lycheeArgs(site);
+        for (const a of args) {
+          assert.ok(got.includes(a), `lychee received ${a}`);
         }
       } finally {
         rmSync(site, { recursive: true, force: true });
@@ -695,17 +650,94 @@ test(
 );
 
 test(
+  'the projection hands lychee real timestamps unless the entry has expires',
+  { skip: WIN_SKIP },
+  () => {
+    // The stub leaves the projected CSV untouched (csvAfterRun unset): the
+    // post-run .lycheecache shows what lychee was handed, and the run is a
+    // pure cache-hit run (every row echoed).
+    const owned = `{
+  // seed
+  "https://a.example/": {
+    "result": 200,
+    "when": "2020-01-01T00:00:00Z",
+    "via": "lychee",
+  },
+  "https://b.example/": {
+    "result": 200,
+    "when": "2020-01-01T00:00:00Z",
+    "via": "lychee",
+    "expires": "never",
+  },
+  "https://c.example/": {
+    "result": 200,
+    "when": "2020-01-01T00:00:00Z",
+    "via": "manual",
+    "expires": "2020-06-30",
+  },
+}
+`;
+    const realTs = 1577836800; // 2020-01-01T00:00:00Z
+    const site = makeSite({ stdout: SUMMARY_1OK, exit: 0 });
+    writeFileSync(join(site, 'link-cache.jsonc'), owned);
+    try {
+      const r = runWrapper(site);
+      assert.equal(r.status, 0, 'run succeeds');
+      assert.equal(
+        readFileSync(join(site, 'link-cache.jsonc'), 'utf8'),
+        owned,
+        'a cache-hit run leaves the owned file byte-identical',
+      );
+      const rows = new Map(
+        readFileSync(join(site, '.lycheecache'), 'utf8')
+          .trim()
+          .split('\n')
+          .map((l) => l.split(','))
+          .map(([url, , ts]) => [url, Number(ts)]),
+      );
+      assert.equal(
+        rows.get('https://a.example/'),
+        realTs,
+        'without expires the real ts projects, so max_cache_age governs',
+      );
+      const isFresh = (ts) => Math.abs(ts * 1000 - Date.now()) < 60_000;
+      assert.ok(
+        isFresh(rows.get('https://b.example/')),
+        'expires never: a fresh ts, so lychee always serves it',
+      );
+      assert.ok(
+        isFresh(rows.get('https://c.example/')),
+        'a lapsed expires projects fresh; prune retires it',
+      );
+    } finally {
+      rmSync(site, { recursive: true, force: true });
+    }
+  },
+);
+
+test('--check-stale is forwarded to lychee', { skip: WIN_SKIP }, () => {
+  // Nothing consumes the retired flag, so real lychee rejects it: a 0.5.0
+  // script fails loud rather than silently running in a mode that no longer
+  // exists.
+  const site = makeSite({ stdout: SUMMARY_1OK, exit: 0 });
+  try {
+    runWrapper(site, ['--check-stale']);
+    assert.ok(
+      lycheeArgs(site).includes('--check-stale'),
+      'the flag is forwarded untouched',
+    );
+  } finally {
+    rmSync(site, { recursive: true, force: true });
+  }
+});
+
+test(
   'the wrapper passes --cache to lychee and rejects --cache=false',
   { skip: WIN_SKIP },
   () => {
     // Without the cache, a successful run would erase every projected entry on
-    // merge-back; the stub records its argv so the flag is observable.
+    // merge-back.
     const site = makeSite({ stdout: SUMMARY_1OK, exit: 0 });
-    writeFileSync(
-      join(site, 'stub-bin', 'lychee'),
-      `#!/bin/sh\necho "$@" > argv.txt\nprintf '%s\\n' ${JSON.stringify(SUMMARY_1OK)}\nexit 0\n`,
-    );
-    chmodSync(join(site, 'stub-bin', 'lychee'), 0o755);
     writeFileSync(
       join(site, 'link-cache.jsonc'),
       '{\n  "https://a.example/": {\n    "result": 200,\n    "when": "2026-01-01T00:00:00Z",\n    "via": "lychee",\n  },\n}\n',
@@ -713,9 +745,8 @@ test(
     try {
       const r = runWrapper(site);
       assert.equal(r.status, 0, 'run succeeds');
-      assert.match(
-        readFileSync(join(site, 'argv.txt'), 'utf8'),
-        /--cache\b/,
+      assert.ok(
+        lycheeArgs(site).includes('--cache'),
         'lychee runs with the cache enabled',
       );
       const rejected = runWrapper(site, ['--cache=false']);
