@@ -8,10 +8,9 @@ Two tools:
   the committed `link-cache.jsonc` cache and lychee's derived `.lycheecache` in
   sync.
 - **`link-cache`**: inspect and prune the cache. List the oldest entries, prune
-  a count or percentage (optionally scoped by URL regex; `manual` entries are
-  exempt, and those with an `expires` date retire then), print a summary
-  (result, provenance, ages), or run the staleness guard (`--max-age`).
-  (`refcache` is a deprecated alias.)
+  a count or percentage (optionally scoped by URL regex; entries whose `expires`
+  has lapsed always go, entries whose `expires` holds never do), or print a
+  summary (result, provenance, ages). (`refcache` is a deprecated alias.)
 
 With a committed `lychee.toml` and `link-cache.jsonc`, these give a site a
 self-contained, cached link-checking setup: fast reruns, and diffs that reflect
@@ -64,14 +63,22 @@ Each entry records:
   host, no default port, resolved dot segments, and a `/` path on bare hosts
   (`https://example.com/`, never `https://example.com`). Results merge back by
   byte-for-byte key comparison, so a non-canonical spelling never matches its
-  re-check.
-- **`expires`** (optional, `manual` entries): `YYYY-MM-DD`. Until then the entry
-  is trusted; after that, a `--check-stale` run re-checks it live and replaces
-  it with the verified result. Seed **2xx results only**: a seed's job is to
+  re-check. A hand-written entry may omit `when`; the next check run dates it.
+- **`expires`** (optional, any entry): the per-entry override of lychee's
+  `max_cache_age`. **Present, it governs; absent, `max_cache_age` governs.**
+  Written as `YYYY-MM-DD` (valid through that day) or `never`; you may write
+  `+Nd` (N days from now), which the next check run writes back as a date. While
+  it holds, the entry is served on every run, never re-checked, and never pruned
+  as one of the oldest; `never` makes that permanent. It is **one-shot**: once
+  the date passes, the next `link-cache --prune` drops the entry, and the next
+  check re-adds a live URL as a plain `lychee` entry (or records a failure word
+  for triage in the refresh PR). Seed **2xx results only**: a seed's job is to
   vouch that a URL is good so it isn't re-checked, and only 2xx results serve as
   cache hits, so a non-2xx seed is re-checked every run, fails it, and is
   replaced by the live result. For URLs whose expected status is non-2xx, use
-  `exclude` or `accept` instead.
+  `exclude` or `accept` instead. A `manual` entry **without** `expires` follows
+  `max_cache_age` and rotates like any other entry (0.4.x and 0.5.0 exempted all
+  manual entries from pruning); permanence is spelled `"expires": "never"`.
 
 Lychee's own CSV cache, `.lycheecache`, is **derived**: `lychee-norm-cache`
 projects the owned cache into it before each run and folds lychee's results back
@@ -79,49 +86,37 @@ afterwards. Gitignore `.lycheecache`; commit `link-cache.jsonc`. A re-check that
 changes an entry's result replaces the entry (provenance moves to `lychee`); a
 re-confirmation leaves provenance-bearing entries (`manual`, named resolvers)
 untouched, while a live re-check of a `lychee`-owned entry refreshes its `when`
-to record recency (a default-mode cache hit is not a re-check and leaves `when`
-untouched). A URL the run itself reports as failing is recorded with its failure
-word; an entry that merely goes missing from lychee's CSV is left untouched
-(cache-status excludes, cache aging, and site changes all remove entries from
-healthy runs). Failure evidence counts only on a dead-links exit, and new
-failure entries mint for http(s) URLs only; for the rationale, see `mergeBack`'s
-contract in `lib/cache.mjs`.
+to record recency (a cache hit is not a re-check and leaves `when` untouched). A
+URL the run itself reports as failing is recorded with its failure word; an
+entry that merely goes missing from lychee's CSV is left untouched (cache-status
+excludes, cache aging, and site changes all remove entries from healthy runs).
+Failure evidence counts only on a dead-links exit, and new failure entries mint
+for http(s) URLs only; for the rationale, see `mergeBack`'s contract in
+`lib/cache.mjs`.
 
-## Two modes: PR checks vs. cache refresh
+## Recommended setup: PR checks plus a scheduled refresh
 
-`lychee-norm-cache` applies staleness checks only on request:
+`lychee-norm-cache` has one behavior in every lane: a cached 2xx result is
+handed to lychee with its real timestamp, so lychee's `max_cache_age` decides
+whether to serve or re-check it, unless the entry's `expires` holds, in which
+case it is always served. A run therefore verifies URLs new to the cache,
+recorded failures and non-2xx results (which never serve as cache hits), and
+anything older than `max_cache_age`.
 
-- **Default (PR checks)**: every cached 2xx result is projected into lychee's
-  CSV with a fresh timestamp, so lychee's `max_cache_age` never triggers and
-  expired manual seeds aren't re-checked. A run verifies only URLs without a
-  cached 2xx result, that is, URLs new to the cache plus recorded failures and
-  non-2xx results (lychee's cache loader accepts success codes only, so those
-  never serve as hits and re-check on every run). Entries still age for real
-  (their `when` timestamps are untouched in the owned file); the default just
-  doesn't act on the age.
-- **`--check-stale` (cache refresh)**: real timestamps are projected and
-  lychee's `max_cache_age` and manual `expires` dates apply, so stale and
-  expired entries are re-verified. Use this mode in a scheduled cache-refresh
-  job. In steady state, `link-cache --prune` and `--check-stale` runs are what
-  drive re-checks.
-
-Because a default run never re-checks cached 2xx results, a stopped refresh job
-lets the cache age silently. Guard against that with the staleness guard:
-
-```sh
-link-cache --max-age 60   # exit 3 when the oldest refreshable entry is >60 days old
-```
-
-Under a healthy `--check-stale` schedule the oldest entries legitimately age up
-to `max_cache_age` plus one refresh interval before their re-check lands, so set
-the threshold **at or above that sum** (a lower threshold fails on healthy
-caches); a prune-driven rotation sizes the threshold to its full prune cycle
-instead. Run the guard where its failure gets seen (the refresh job itself, or
-another scheduled check). The guard ages lychee-owned entries by their check
-time, and expired manual seeds by their `expires` date; unexpired seeds and
-named-resolver entries are exempt (their lifecycle is owned elsewhere). It also
-fails on evidence it can't trust: malformed cache lines, or a future-dated
-timestamp anywhere among the aged entries.
+- **PR lane**: run the checker unflagged. Under a healthy refresh lane, nothing
+  in the cache is ever older than `max_cache_age`, so a PR's outcome depends
+  only on the URLs it adds.
+- **Refresh lane**: a scheduled workflow that prunes the N oldest entries
+  (`link-cache --prune N`, which also drops every entry whose `expires` has
+  lapsed), runs the checker, and opens a PR with the cache changes: live URLs
+  come back with fresh timestamps, dead ones with failure words for triage. Size
+  N so the cache rotates fully every few weeks.
+- **`max_cache_age`** in `lychee.toml` is the last-resort safety net, not a
+  refresh mechanism: set it far above one full rotation (a year is typical). It
+  fires only when the refresh lane has stopped; the refreshed timestamps then
+  showing up in PR diffs are the alarm, and the remedy is the refresh lane,
+  never the age. A project wanting PR runs that never re-check cached entries
+  can forward a huge value (`-- --max-cache-age 3650d`).
 
 Without a `link-cache.jsonc`, `lychee-norm-cache` falls back to the legacy mode:
 normalize the committed `.lycheecache` in place. To import an existing CSV
@@ -175,7 +170,7 @@ npm install --save-dev link-cache
 Or, to install from GitHub rather than the npm registry:
 
 ```sh
-npm install --save-dev github:chalin/link-cache#semver:^0.5.0
+npm install --save-dev github:chalin/link-cache#semver:^0.6.0
 ```
 
 This puts both bins on your project's `PATH`.
@@ -193,11 +188,10 @@ Wire the bins into your `package.json` scripts, using bare names (`npm run` puts
 ```
 
 ```sh
-npm run check:links              # verify URLs not yet in the cache
-npm run check:links -- --check-stale  # also re-verify stale/expired entries
+npm run check:links              # check; cached entries serve until max_cache_age or expires says otherwise
 npm run link-cache -- --summary  # cache stats (count, oldest, result, via, ages)
 npm run link-cache -- --match 'github\.com' --prune 10  # trim 10 oldest matching
-npm run link-cache -- --max-age 60  # staleness guard (exit 3 when breached)
+npm run link-cache -- --prune 0  # drop only entries whose expires has lapsed
 ```
 
 > [!WARNING]
@@ -211,9 +205,8 @@ npm run link-cache -- --max-age 60  # staleness guard (exit 3 when breached)
 `lychee-norm-cache` runs in the current directory (your site root) and forwards
 any extra arguments to lychee. Run either tool with `--help` for its full
 options, and `lychee --help` for the link-checking flags `lychee-norm-cache`
-forwards (e.g. `--offline`). To force re-checks, use `--check-stale`; the
-default mode rejects a forwarded `--max-cache-age`, whose file-age check would
-silently defeat the fresh-timestamp projection.
+forwards (e.g. `--offline`, or `--max-cache-age` to override `lychee.toml` for
+one run).
 
 ## Development
 
