@@ -4,7 +4,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -304,9 +310,8 @@ test('owned summary includes a via breakdown', () => {
 });
 
 test('owned prune drops the oldest entry, via regardless', () => {
-  // The manual seed (a) is the oldest overall and carries no expires, so it
-  // competes on age like any other entry: provenance says nothing about
-  // lifetime. Its comment goes with it.
+  // The manual seed (a) is the oldest overall and has no expires; its comment
+  // leaves with it.
   const parsed = parseOwnedCache(OWNED_SAMPLE);
   const { writeText, pruned } = runOps(
     parsed,
@@ -414,6 +419,19 @@ test('prune with nothing lapsed and --prune 0 rewrites nothing', () => {
   assert.equal(writeText, null, 'no rewrite');
 });
 
+test('list shows each entry expiry, so a prune preview reads honestly', () => {
+  // `-l N -p N` previews a prune only if the reader can tell which of the N
+  // oldest are exempt; the column makes that visible.
+  const parsed = cacheOf(NEVER, HOLDS, OLD);
+  const { output } = runOps(parsed, [{ kind: 'list', value: '3' }], {
+    now: NOW,
+  });
+  const rows = output.split('\n').slice(1);
+  assert.match(rows[0], /never\.example\/\s+expires never$/, 'never shown');
+  assert.match(rows[1], /holds\.example\/\s+expires 2002-01-01$/, 'date shown');
+  assert.match(rows[2], /old\.example\/$/, 'no expires, no column');
+});
+
 // --- --match scoping ---
 
 test('match scopes list and summary to matching URLs', () => {
@@ -486,9 +504,6 @@ test('match scopes the lapsed drop: an out-of-scope lapsed entry survives', () =
 // --- retired flags ---
 
 test('parseArgs rejects the retired --no-manual and --max-age flags', () => {
-  // --no-manual shipped only in the unpublished 0.4.2; --max-age (0.5.0's
-  // staleness guard) went with the mode split in 0.6.0. Both fail loud as
-  // unknown flags rather than silently doing something else.
   for (const flag of ['--no-manual', '--max-age']) {
     assert.throws(
       () => parseArgs([flag, '30']),
@@ -498,7 +513,7 @@ test('parseArgs rejects the retired --no-manual and --max-age flags', () => {
   }
 });
 
-test('exit codes stop at 2: a prune run exits 0', () => {
+test('a CLI prune over a legacy CSV rewrites the file and exits 0', () => {
   const script = fileURLToPath(new URL('./index.mjs', import.meta.url));
   const dir = mkdtempSync(join(tmpdir(), 'link-cache-'));
   const file = join(dir, '.lycheecache');
@@ -507,8 +522,9 @@ test('exit codes stop at 2: a prune run exits 0', () => {
     const r = spawnSync(process.execPath, [script, file, '--prune', '1'], {
       encoding: 'utf8',
     });
-    assert.equal(r.status, 0, 'no guard verdict, no exit 3');
-    assert.match(r.stdout, /1 oldest \(1 → 0\)/, 'the prune ran');
+    assert.equal(r.status, 0, 'prune exits 0');
+    assert.match(r.stdout, /1 oldest \(1 → 0\)/, 'the prune is reported');
+    assert.equal(readFileSync(file, 'utf8'), '', 'the entry is gone');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

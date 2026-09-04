@@ -182,7 +182,9 @@ export function formatList(entries, n, { now = Date.now() / 1000 } = {}) {
   const rows = chosen.map((e) => {
     const ageDays = Math.floor((now - e.ts) / DAY);
     const via = e.via !== undefined ? `  ${e.via}` : '';
-    return `  ${localStamp(e.ts)}  ${String(ageDays).padStart(4)}d  ${e.status}${via}  ${displayUrl(e.url)}`;
+    const expires =
+      e.src?.expires !== undefined ? `  expires ${e.src.expires}` : '';
+    return `  ${localStamp(e.ts)}  ${String(ageDays).padStart(4)}d  ${e.status}${via}  ${displayUrl(e.url)}${expires}`;
   });
   return [head, ...rows].join('\n');
 }
@@ -253,11 +255,8 @@ export function runOps(
     if (op.kind === 'list') {
       out.push(formatList(current(), Number(op.value), { now }));
     } else if (op.kind === 'prune') {
-      // A lapsed expires is spent: every such entry goes, unconditionally, so
-      // a dated expiry reliably retires at the next prune (and `--prune 0`
-      // means "lapsed only"). An expires that still holds exempts its entry
-      // from the age-ordered selection; everything else competes on age, via
-      // regardless (provenance says nothing about lifetime).
+      // Lapsed `expires` go first, unconditionally, so `--prune 0` means
+      // "lapsed only"; holding ones are exempt; the rest compete on age.
       const cur = current();
       const lapsed = cur.filter((e) => hasLapsed(e.src?.expires, now));
       const eligible = cur.filter((e) => e.src?.expires === undefined);
@@ -365,13 +364,14 @@ const USAGE = `Usage: link-cache [CACHE_FILE] [options]
 
 Inspect and prune a link cache: the owned ${OWNED_FILE} (default when present)
 or a legacy Lychee CSV like ${CSV_FILE}. Options run in the order given, over
-the evolving cache, so \`-l 5 -p 5\` lists the 5 oldest about to be pruned,
-while \`-p 5 -l 5\` lists the next 5 after pruning.
+the evolving cache, so \`-l 5 -p 5\` lists the 5 oldest before pruning (rows
+marked \`expires\` are exempt and stay), while \`-p 5 -l 5\` lists the next 5
+after pruning.
 
-  -l, --list NUM        list the NUM oldest entries
+  -l, --list NUM        list the NUM oldest entries (with their expires, if any)
   -m, --match REGEX     scope all operations to URLs matching REGEX
-  -p, --prune NUM[%]    drop every entry whose expires has lapsed, then the NUM
-                        (or NUM%) oldest entries without an expires, and
+  -p, --prune NUM[%]    drop every in-scope entry whose expires has lapsed, then
+                        the NUM (or NUM%) oldest without an expires, and
                         rewrite; entries whose expires holds are exempt
                         (\`--prune 0\` drops lapsed entries only)
   -s, --summary         print a summary (counts, ages, result, via, histogram)

@@ -635,9 +635,6 @@ test(
   'forwarded cache-age flags pass through to lychee',
   { skip: WIN_SKIP },
   () => {
-    // lychee's max_cache_age is the one lifetime; a project may override it
-    // from the command line (e.g. a huge value for strict never-re-check PR
-    // runs), and the wrapper has no opinion.
     const owned =
       '{\n  "https://a.example/": {\n    "result": 200,\n    "when": "2020-01-01T00:00:00Z",\n    "via": "lychee",\n  },\n}\n';
     for (const args of [['--max-cache-age', '90d'], ['--max-cache-age=90d']]) {
@@ -706,37 +703,29 @@ test(
   },
 );
 
-test(
-  'the wrapper no longer consumes --check-stale: it reaches lychee',
-  { skip: WIN_SKIP },
-  () => {
-    // Real lychee rejects the unknown flag, so a 0.5.0 script fails loud
-    // rather than silently running in a mode that no longer exists.
-    const site = makeSite({ stdout: SUMMARY_1OK, exit: 0 });
-    try {
-      runWrapper(site, ['--check-stale']);
-      assert.ok(
-        lycheeArgs(site).includes('--check-stale'),
-        'the flag is forwarded untouched',
-      );
-    } finally {
-      rmSync(site, { recursive: true, force: true });
-    }
-  },
-);
+test('--check-stale is forwarded to lychee', { skip: WIN_SKIP }, () => {
+  // Nothing consumes the retired flag, so real lychee rejects it: a 0.5.0
+  // script fails loud rather than silently running in a mode that no longer
+  // exists.
+  const site = makeSite({ stdout: SUMMARY_1OK, exit: 0 });
+  try {
+    runWrapper(site, ['--check-stale']);
+    assert.ok(
+      lycheeArgs(site).includes('--check-stale'),
+      'the flag is forwarded untouched',
+    );
+  } finally {
+    rmSync(site, { recursive: true, force: true });
+  }
+});
 
 test(
   'the wrapper passes --cache to lychee and rejects --cache=false',
   { skip: WIN_SKIP },
   () => {
     // Without the cache, a successful run would erase every projected entry on
-    // merge-back; the stub records its argv so the flag is observable.
+    // merge-back.
     const site = makeSite({ stdout: SUMMARY_1OK, exit: 0 });
-    writeFileSync(
-      join(site, 'stub-bin', 'lychee'),
-      `#!/bin/sh\necho "$@" > argv.txt\nprintf '%s\\n' ${JSON.stringify(SUMMARY_1OK)}\nexit 0\n`,
-    );
-    chmodSync(join(site, 'stub-bin', 'lychee'), 0o755);
     writeFileSync(
       join(site, 'link-cache.jsonc'),
       '{\n  "https://a.example/": {\n    "result": 200,\n    "when": "2026-01-01T00:00:00Z",\n    "via": "lychee",\n  },\n}\n',
@@ -744,9 +733,8 @@ test(
     try {
       const r = runWrapper(site);
       assert.equal(r.status, 0, 'run succeeds');
-      assert.match(
-        readFileSync(join(site, 'argv.txt'), 'utf8'),
-        /--cache\b/,
+      assert.ok(
+        lycheeArgs(site).includes('--cache'),
         'lychee runs with the cache enabled',
       );
       const rejected = runWrapper(site, ['--cache=false']);
