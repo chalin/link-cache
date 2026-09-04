@@ -1,6 +1,6 @@
 // Tests for the Lychee check wrapper: pure helpers (token resolution, cache
 // normalization, summary parsing, exit mapping) and hermetic end-to-end runs
-// against a stub lychee binary -- no network and no real lychee needed.
+// against a stub lychee binary (no network and no real lychee needed).
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -161,10 +161,7 @@ test(
   'publicDirOf keeps the lexical path when public is a symlink',
   { skip: process.platform === 'win32' ? 'POSIX symlinks only' : false },
   () => {
-    // Sites often symlink public/ to a separate (diffable) git repo. The
-    // /public/-anchored exclude_path patterns in lychee.toml only match if the
-    // path handed to lychee still ends in /public -- resolving the symlink
-    // would silently disable every exclusion.
+    // Input: public/ as a symlink; rationale at publicDirOf.
     const dir = mkdtempSync(join(tmpdir(), 'lnc-'));
     try {
       const target = join(dir, 'site.g');
@@ -549,9 +546,7 @@ test(
   'a preflight failure leaves the owned cache untouched and clears the derived CSV',
   { skip: WIN_SKIP },
   () => {
-    // A run that never happened must not fold: the projected entries would be
-    // mislabeled as failed. The derived CSV is removed too: a projection no
-    // completed run consumed is not a cache state to keep.
+    // Input: a preflight failure after the projection was written.
     const site = makeSite({ stdout: 'error: bad usage', exit: 2 });
     writeFileSync(join(site, 'link-cache.jsonc'), OWNED_WITH_EXPIRED);
     try {

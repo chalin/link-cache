@@ -116,8 +116,6 @@ test('parseCache reads url, status and timestamp from a quoted URL', () => {
 });
 
 test('parseCache rejects empty-URL and non-numeric rows as malformed', () => {
-  // The lenient 0.4.x parser accepted these as entries, so junk rows fed the
-  // age statistics and could be "pruned" as if they were URLs.
   const { entries, malformed } = parseCache(
     ',200,123\n"",200,123\nhttps://a.example/,foo,123\nhttps://b.example/,200,bad\n"https://c.example/,200,123\nhttps://ok.example/,200,123\n',
   );
@@ -311,8 +309,7 @@ test('owned summary includes a via breakdown', () => {
 });
 
 test('owned prune drops the oldest entry, via regardless', () => {
-  // The manual seed (a) is the oldest overall and has no expires; its comment
-  // leaves with it.
+  // Input: the oldest entry is a manual seed without expires.
   const parsed = parseOwnedCache(OWNED_SAMPLE);
   const { writeText, pruned } = runOps(
     parsed,
@@ -368,9 +365,8 @@ const MID = block('https://mid.example/', NOW - 200 * DAY, 'browser');
 const NEW = block('https://new.example/', NOW - 100 * DAY, 'lychee');
 
 test('prune drops lapsed entries unconditionally, then the N oldest of the rest', () => {
-  // The lapsed entry is the newest by timestamp and still goes; the holding
-  // and never entries are the oldest and still stay. Only the entries without
-  // expires compete on age.
+  // Inputs: a newest lapsed entry, oldest holding and never entries, three
+  // without expires.
   const parsed = cacheOf(NEVER, HOLDS, LAPSED, OLD, MID, NEW);
   const { writeText, pruned, output } = runOps(
     parsed,
@@ -430,10 +426,7 @@ test('prune with nothing lapsed and --prune 0 rewrites nothing', () => {
 });
 
 test('a prune that drops nothing still persists normalization', () => {
-  // Sugar and a defaulted when resolve on every read; a committed "+0d" would
-  // re-resolve to "today" on each prune day and never lapse unless a writer
-  // persists the date. Prune is the mutating op, so it writes the canonical
-  // file whenever the read changed it.
+  // Input: unresolved sugar and no when; rationale at runOps's write gate.
   const text = `{\n  "https://a.example/": { "result": 200, "via": "manual", "expires": "+0d" },\n}\n`;
   const parsed = parseOwnedCache(text, { now: NOW });
   const { writeText, pruned } = runOps(
@@ -451,8 +444,6 @@ test('a prune that drops nothing still persists normalization', () => {
 });
 
 test('list shows each entry expiry, so a prune preview reads honestly', () => {
-  // `-l N -p N` previews a prune only if the reader can tell which of the N
-  // oldest are exempt (holding) and which go first (lapsed).
   const parsed = cacheOf(NEVER, HOLDS, LAPSED, OLD);
   const { output } = runOps(parsed, [{ kind: 'list', value: '4' }], {
     now: NOW,

@@ -1,11 +1,8 @@
 #!/usr/bin/env node
-// The `link-cache` bin (deprecated alias: `refcache`): inspect and prune a
-// link cache -- the owned JSONC cache (link-cache.jsonc) or a legacy Lychee CSV
-// (.lycheecache). Read-only unless `--prune` is given, and never hits the
-// network. Run with `--help` for usage.
-//
-// CSV line format: URL,STATUS,UNIX_TIMESTAMP -- the URL is CSV-quoted when it
-// contains a comma, so STATUS and TIMESTAMP are read from the final two fields.
+// The `link-cache` bin (deprecated alias: `refcache`): inspect and prune the
+// owned JSONC cache (link-cache.jsonc) or a legacy Lychee CSV (.lycheecache).
+// Writes only on `--prune`, never hits the network. Run with `--help` for
+// usage.
 
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -162,7 +159,7 @@ export function computeStats(
 
 const pad2 = (n) => String(n).padStart(2, '0');
 
-// Local-time `YYYY-MM-DD HH:MM:SS ZONE` -- entries minutes apart share a date, so
+// Local-time `YYYY-MM-DD HH:MM:SS ZONE`: entries minutes apart share a date, so
 // the time disambiguates them. Shown in the user's timezone (with a short zone
 // label) to save them the UTC math.
 const localStamp = (ts) => {
@@ -288,9 +285,8 @@ export function runOps(
   let writeText = null;
   const didPrune = ops.some((op) => op.kind === 'prune');
   if (pruned > 0 || (didPrune && parsed.normalized)) {
-    // Survivors are all unpruned entries -- including those outside the
-    // --match scope, which the scope only shields from ops, never from the
-    // rewrite. A prune that drops nothing still persists a read that
+    // Survivors are all unpruned entries, including those outside the --match
+    // scope (the scope shields entries from ops, never from the rewrite). A prune that drops nothing still persists a read that
     // normalized the file (resolved sugar, defaulted `when`): otherwise a
     // committed "+0d" re-resolves to "today" on every prune day.
     const survivors = parsed.entries.filter((e) => !removed.has(e.index));
