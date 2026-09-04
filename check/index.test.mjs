@@ -698,7 +698,7 @@ test(
       assert.equal(
         rows.get('https://a.example/'),
         realTs,
-        'no expires: the real ts, so max_cache_age governs',
+        'without expires the real ts projects, so max_cache_age governs',
       );
       const isFresh = (ts) => Math.abs(ts * 1000 - Date.now()) < 60_000;
       assert.ok(
@@ -707,7 +707,7 @@ test(
       );
       assert.ok(
         isFresh(rows.get('https://c.example/')),
-        'lapsed expires: still fresh, prune retires it',
+        'a lapsed expires projects fresh; prune retires it',
       );
     } finally {
       rmSync(site, { recursive: true, force: true });

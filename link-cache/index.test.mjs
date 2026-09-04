@@ -390,7 +390,7 @@ test('--prune 0 drops lapsed entries only', () => {
     { now: NOW },
   );
   assert.equal(pruned, 1, 'only the lapsed entry');
-  assert.equal(writeText, `{\n${NEVER}${OLD}}\n`, 'nothing else moved');
+  assert.equal(writeText, `{\n${NEVER}${OLD}}\n`, 'the other entries stand');
 });
 
 test('a percentage prune is a share of the entries without expires', () => {
