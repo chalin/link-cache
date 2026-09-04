@@ -25,6 +25,7 @@ import {
   formatStats,
   runOps,
 } from './index.mjs';
+import { tsToWhen } from '../lib/cache.mjs';
 
 const DAY = 86400;
 const NOW = 1_000_000_000; // fixed reference epoch (seconds)
@@ -340,9 +341,8 @@ test('owned prune preserves surviving entries byte-identically', () => {
 });
 
 // Owned-entry block builder for expiry fixtures. NOW is 2001-09-09.
-const when = (ts) => new Date(ts * 1000).toISOString().replace(/\.\d{3}Z$/, '');
 const block = (url, ts, via, expires) =>
-  `  ${JSON.stringify(url)}: {\n    "result": 200,\n    "when": "${when(ts)}Z",\n    "via": ${JSON.stringify(via)},\n${expires === undefined ? '' : `    "expires": ${JSON.stringify(expires)},\n`}  },\n`;
+  `  ${JSON.stringify(url)}: {\n    "result": 200,\n    "when": "${tsToWhen(ts)}",\n    "via": ${JSON.stringify(via)},\n${expires === undefined ? '' : `    "expires": ${JSON.stringify(expires)},\n`}  },\n`;
 const cacheOf = (...blocks) => parseOwnedCache(`{\n${blocks.join('')}}\n`);
 
 const NEVER = block(
@@ -360,7 +360,7 @@ const HOLDS = block(
 const LAPSED = block(
   'https://lapsed.example/',
   NOW - 1 * DAY,
-  'manual',
+  'lychee', // lapse drops via-regardless
   '2001-01-01',
 );
 const OLD = block('https://old.example/', NOW - 300 * DAY, 'lychee');
@@ -395,6 +395,16 @@ test('--prune 0 drops lapsed entries only', () => {
   );
   assert.equal(pruned, 1, 'only the lapsed entry');
   assert.equal(writeText, `{\n${NEVER}${OLD}}\n`, 'nothing else moved');
+});
+
+test('a percentage prune is a share of the entries without expires', () => {
+  // 50% of {OLD, MID, NEW} is 1, whatever the exempt and lapsed counts.
+  const parsed = cacheOf(NEVER, HOLDS, LAPSED, OLD, MID, NEW);
+  const { pruned, output } = runOps(parsed, [{ kind: 'prune', value: '50%' }], {
+    now: NOW,
+  });
+  assert.equal(pruned, 2, 'one lapsed plus 50% of three eligible');
+  assert.match(output, /1 lapsed, 1 oldest/, 'the basis excludes exempt rows');
 });
 
 test('a 100% prune leaves only entries whose expires holds', () => {

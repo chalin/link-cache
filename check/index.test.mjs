@@ -658,9 +658,11 @@ test(
   'the projection hands lychee real timestamps unless the entry has expires',
   { skip: WIN_SKIP },
   () => {
-    // The stub leaves the projected CSV untouched (csvAfterRun unset), so the
-    // post-run .lycheecache shows what lychee was handed.
+    // The stub leaves the projected CSV untouched (csvAfterRun unset): the
+    // post-run .lycheecache shows what lychee was handed, and the run is a
+    // pure cache-hit run (every row echoed).
     const owned = `{
+  // seed
   "https://a.example/": {
     "result": 200,
     "when": "2020-01-01T00:00:00Z",
@@ -686,6 +688,11 @@ test(
     try {
       const r = runWrapper(site);
       assert.equal(r.status, 0, 'run succeeds');
+      assert.equal(
+        readFileSync(join(site, 'link-cache.jsonc'), 'utf8'),
+        owned,
+        'a cache-hit run leaves the owned file byte-identical',
+      );
       const rows = new Map(
         readFileSync(join(site, '.lycheecache'), 'utf8')
           .trim()

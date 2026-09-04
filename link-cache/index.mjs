@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   CSV_FILE,
+  DAY,
   OWNED_FILE,
   csvUnquote,
   hasLapsed,
@@ -20,7 +21,6 @@ import {
 } from '../lib/cache.mjs';
 import { writeFileAtomic } from '../lib/write.mjs';
 
-const DAY = 86400;
 const BUCKET_COUNT = 5;
 
 // --- parsing ---------------------------------------------------------------
@@ -380,7 +380,7 @@ pruning (a prune drops rows marked \`(lapsed)\` first and spares the other
   -l, --list NUM        list the NUM oldest entries (with their expires, if any)
   -m, --match REGEX     scope all operations to URLs matching REGEX
   -p, --prune NUM[%]    drop every in-scope entry whose expires has lapsed, then
-                        the NUM (or NUM%) oldest without an expires, and
+                        the NUM oldest without an expires (NUM% of those), and
                         rewrite; entries whose expires holds are exempt
                         (\`--prune 0\` drops lapsed entries only; a prune also
                         writes back any normalization the read applied)
