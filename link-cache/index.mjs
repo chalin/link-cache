@@ -183,7 +183,9 @@ export function formatList(entries, n, { now = Date.now() / 1000 } = {}) {
     const ageDays = Math.floor((now - e.ts) / DAY);
     const via = e.via !== undefined ? `  ${e.via}` : '';
     const expires =
-      e.src?.expires !== undefined ? `  expires ${e.src.expires}` : '';
+      e.src?.expires === undefined
+        ? ''
+        : `  expires ${e.src.expires}${hasLapsed(e.src.expires, now) ? ' (lapsed)' : ''}`;
     return `  ${localStamp(e.ts)}  ${String(ageDays).padStart(4)}d  ${e.status}${via}  ${displayUrl(e.url)}${expires}`;
   });
   return [head, ...rows].join('\n');
@@ -364,9 +366,9 @@ const USAGE = `Usage: link-cache [CACHE_FILE] [options]
 
 Inspect and prune a link cache: the owned ${OWNED_FILE} (default when present)
 or a legacy Lychee CSV like ${CSV_FILE}. Options run in the order given, over
-the evolving cache, so \`-l 5 -p 5\` lists the 5 oldest before pruning (rows
-whose \`expires\` still holds are exempt and stay; lapsed ones go first), while
-\`-p 5 -l 5\` lists the next 5 after pruning.
+the evolving cache, so \`-l 5 -p 5\` lists the 5 oldest by timestamp before
+pruning (a prune drops rows marked \`(lapsed)\` first and spares the other
+\`expires\` rows), while \`-p 5 -l 5\` lists the next 5 after pruning.
 
   -l, --list NUM        list the NUM oldest entries (with their expires, if any)
   -m, --match REGEX     scope all operations to URLs matching REGEX

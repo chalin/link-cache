@@ -421,15 +421,20 @@ test('prune with nothing lapsed and --prune 0 rewrites nothing', () => {
 
 test('list shows each entry expiry, so a prune preview reads honestly', () => {
   // `-l N -p N` previews a prune only if the reader can tell which of the N
-  // oldest are exempt; the column makes that visible.
-  const parsed = cacheOf(NEVER, HOLDS, OLD);
-  const { output } = runOps(parsed, [{ kind: 'list', value: '3' }], {
+  // oldest are exempt (holding) and which go first (lapsed).
+  const parsed = cacheOf(NEVER, HOLDS, LAPSED, OLD);
+  const { output } = runOps(parsed, [{ kind: 'list', value: '4' }], {
     now: NOW,
   });
   const rows = output.split('\n').slice(1);
   assert.match(rows[0], /never\.example\/\s+expires never$/, 'never shown');
   assert.match(rows[1], /holds\.example\/\s+expires 2002-01-01$/, 'date shown');
   assert.match(rows[2], /old\.example\/$/, 'the row ends at the URL');
+  assert.match(
+    rows[3],
+    /lapsed\.example\/\s+expires 2001-01-01 \(lapsed\)$/,
+    'a lapsed date is marked',
+  );
 });
 
 // --- --match scoping ---
