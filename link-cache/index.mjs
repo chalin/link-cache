@@ -65,6 +65,9 @@ export function parseCache(text) {
 }
 
 // Adapt the owned JSONC cache to the same entry shape (string status, index).
+// `normalized` flags a read that changed the file's canonical text (sugar
+// resolved, a `when` defaulted, a legacy field migrated, formatting), so a
+// prune can persist it even when it drops nothing.
 export function parseOwnedCache(text, { now = Date.now() / 1000 } = {}) {
   const owned = parseOwned(text, { now });
   const entries = owned.entries.map((e, index) => ({
@@ -75,7 +78,8 @@ export function parseOwnedCache(text, { now = Date.now() / 1000 } = {}) {
     index,
     src: e,
   }));
-  return { kind: 'owned', owned, entries, malformed: 0 };
+  const normalized = serializeOwned(owned) !== text;
+  return { kind: 'owned', owned, entries, malformed: 0, normalized };
 }
 
 // --- selection / pruning ---------------------------------------------------
@@ -282,10 +286,13 @@ export function runOps(
   }
 
   let writeText = null;
-  if (pruned > 0) {
+  const didPrune = ops.some((op) => op.kind === 'prune');
+  if (pruned > 0 || (didPrune && parsed.normalized)) {
     // Survivors are all unpruned entries -- including those outside the
     // --match scope, which the scope only shields from ops, never from the
-    // rewrite.
+    // rewrite. A prune that drops nothing still persists a read that
+    // normalized the file (resolved sugar, defaulted `when`): otherwise a
+    // committed "+0d" re-resolves to "today" on every prune day.
     const survivors = parsed.entries.filter((e) => !removed.has(e.index));
     if (parsed.kind === 'owned') {
       // Comments of surviving entries travel with them; pruned entries take
@@ -375,7 +382,8 @@ pruning (a prune drops rows marked \`(lapsed)\` first and spares the other
   -p, --prune NUM[%]    drop every in-scope entry whose expires has lapsed, then
                         the NUM (or NUM%) oldest without an expires, and
                         rewrite; entries whose expires holds are exempt
-                        (\`--prune 0\` drops lapsed entries only)
+                        (\`--prune 0\` drops lapsed entries only; a prune also
+                        writes back any normalization the read applied)
   -s, --summary         print a summary (counts, ages, result, via, histogram)
   -h, --help            show this help
 

@@ -419,6 +419,27 @@ test('prune with nothing lapsed and --prune 0 rewrites nothing', () => {
   assert.equal(writeText, null, 'writeText stays null');
 });
 
+test('a prune that drops nothing still persists normalization', () => {
+  // Sugar and a defaulted when resolve on every read; a committed "+0d" would
+  // re-resolve to "today" on each prune day and never lapse unless a writer
+  // persists the date. Prune is the mutating op, so it writes the canonical
+  // file whenever the read changed it.
+  const text = `{\n  "https://a.example/": { "result": 200, "via": "manual", "expires": "+0d" },\n}\n`;
+  const parsed = parseOwnedCache(text, { now: NOW });
+  const { writeText, pruned } = runOps(
+    parsed,
+    [{ kind: 'prune', value: '0' }],
+    { now: NOW },
+  );
+  assert.equal(pruned, 0, 'the prune count is zero');
+  assert.match(
+    writeText,
+    /"expires": "2001-09-09"/,
+    'the sugar is written resolved',
+  );
+  assert.match(writeText, /"when": "2001-09-09T01:46:40Z"/, 'when is written');
+});
+
 test('list shows each entry expiry, so a prune preview reads honestly', () => {
   // `-l N -p N` previews a prune only if the reader can tell which of the N
   // oldest are exempt (holding) and which go first (lapsed).

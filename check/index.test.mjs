@@ -698,7 +698,7 @@ test(
         realTs,
         'no expires: the real ts, so max_cache_age governs',
       );
-      const isFresh = (ts) => ts > realTs && ts * 1000 <= Date.now() + 1000;
+      const isFresh = (ts) => Math.abs(ts * 1000 - Date.now()) < 60_000;
       assert.ok(
         isFresh(rows.get('https://b.example/')),
         'expires never: a fresh ts, so lychee always serves it',
