@@ -56,9 +56,9 @@ opentelemetry.io), a version younger than a week is rejected, so open those
 bumps a week after publishing, or wait out the cooldown in the bump branch;
 docsy-example has no cooldown. Current consumers and what a bump touches:
 
-- **[google/docsy][]** (docsy.dev): `package.json` pin, the PR check workflow,
-  and the scheduled refresh workflow; the repo's maintainer notes describe the
-  cache semantics.
+- **[google/docsy][]** (docsy.dev): the `docsy.dev/package.json` pin, the PR
+  check workflow, and the scheduled refresh workflow; the repo's maintainer
+  notes describe the cache semantics.
 - **[google/docsy-example][]**: `package.json` pin and its check scripts; no
   refresh lane.
 - **[chalin/docsy-starter][]**: `package.json` pin. It is the reference wiring

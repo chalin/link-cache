@@ -47,7 +47,7 @@ Create the owned cache as an empty object, build your site, set `max_cache_age`
 in `lychee.toml` (a year is typical), then check:
 
 ```sh
-echo '{}' > link-cache.jsonc     # once; without it the check runs cache-less
+echo '{}' > link-cache.jsonc     # once; else the check stays in legacy CSV mode
 npm run check:links              # fills link-cache.jsonc
 npm run link-cache -- --summary  # cache stats
 ```

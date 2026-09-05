@@ -124,9 +124,11 @@ cache:
 npm run check:links -- --import   # .lycheecache -> link-cache.jsonc
 ```
 
-Then commit `link-cache.jsonc` and gitignore `.lycheecache`. If the CSV cache
-carried a `merge=union` gitattribute, drop it rather than moving it over (it
-proved ineffective on the CSV, and it corrupts the owned file:
+`--import` needs a readable CSV and refuses to overwrite an existing
+`link-cache.jsonc` (exit 2): remove a bootstrap `{}` file first. Then commit
+`link-cache.jsonc` and gitignore `.lycheecache`. If the CSV cache carried a
+`merge=union` gitattribute, drop it rather than moving it over (it proved
+ineffective on the CSV, and it corrupts the owned file:
 [The owned cache](cache-format.md#shape)).
 
 Workflow deltas are limited to the file's identity: artifact upload paths,

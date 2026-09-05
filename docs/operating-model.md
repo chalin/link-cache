@@ -35,8 +35,9 @@ command with the same projection.
   checker unflagged. It checks URLs the cache doesn't vouch for (absent, or with
   a non-2xx result) and entries older than `max_cache_age` (none, under a
   healthy refresh lane: [below](#max_cache_age-the-last-resort-net)). So a PR
-  run's outcome and its cache diff depend only on URLs the cache doesn't vouch
-  for, never on the vouched rest.
+  run's outcome depends only on URLs the cache doesn't vouch for, and so does
+  its cache diff, apart from one-time normalization of hand edits (resolved
+  `+Nd` sugar, a dated `when`-less seed) or of a legacy file.
 - **Refresh lane**: a scheduled workflow that prunes the N oldest entries
   (`npm run link-cache -- --prune N`; lapsed `expires` go too), runs the
   checker, and opens a PR with the cache changes. Live URLs come back with fresh
