@@ -1,0 +1,88 @@
+---
+title: Release runbook
+---
+
+How a `link-cache` version reaches npm, and what follows in the consuming sites.
+Publishing runs on GitHub Actions with npm trusted publishing (OIDC): nobody
+holds a publish token, and the only trigger is a GitHub release.
+
+## Before tagging
+
+1. `main` is green and holds everything meant for the release; docs and code
+   land before the tag, not after.
+2. `package.json` `version` is the release version (the publish workflow refuses
+   a tag that doesn't match it). Bump it in its own commit if needed.
+3. Locally, from a clean checkout of `main`:
+
+   ```sh
+   npm run install:safe
+   npm run check
+   npm pack --dry-run
+   ```
+
+   Read the pack listing against `files` in `package.json`: only the bins and
+   their `lib/` modules ship (plus the manifest, README, and license that npm
+   always includes). No tests, docs, or maintainer pages.
+
+4. Review the diff since the previous tag for behavior changes consumers must
+   act on; they become the release notes.
+
+## Tag and release
+
+1. Tag the merge commit: `git tag vX.Y.Z MERGE_SHA` and
+   `git push origin vX.Y.Z`.
+2. Create the GitHub release from the tag, with notes: a one-line summary,
+   behavior changes and any migration steps, then the merged PRs. The
+   `release: published` event triggers [`publish.yaml`][].
+3. Watch the workflow run. It checks out the tag, asserts the tag matches
+   `package.json`, and runs `npm publish --ignore-scripts` with `id-token`
+   permission. It installs nothing: the check workflow already gates every push,
+   and publishing needs no `node_modules`, so no registry-delivered code runs
+   with publish authority.
+4. Verify on npm: the version appears with a provenance badge, and
+   `npm view link-cache version` prints it.
+
+If the workflow fails after the tag exists, fix on `main`, bump the patch
+version, and release again; never move or delete a published tag.
+
+## Consumer bumps
+
+Consumers pin the package (the larger sites exactly), so each release is
+followed by bump PRs. Current consumers and what a bump touches:
+
+- **[google/docsy][]** (docsy.dev): `package.json` pin, the PR check workflow,
+  and the scheduled refresh workflow; the repo's maintainer notes describe the
+  cache semantics.
+- **[google/docsy-example][]**: `package.json` pin and its check scripts; no
+  refresh lane.
+- **[chalin/docsy-starter][]**: `package.json` pin; the reference wiring other
+  sites copy, so its `lychee.toml` comments must match the released semantics.
+- **[open-telemetry/opentelemetry.io][]**: `package.json` pin, the PR check
+  workflow, the refresh workflow, and helper scripts under `scripts/lychee/`.
+  The largest cache; verify its double-check flow against any change to
+  failure-word recording.
+
+For each bump PR:
+
+1. Pin the new version; run the repo's safe install and its link-check script
+   once to let the tools rewrite the cache file (schema migrations land in this
+   run).
+2. Drop any flag the release removed; workflow runs fail loudly on unknown
+   flags, so the CI result confirms the sweep.
+3. Update the repo's own docs wherever they describe cache semantics.
+4. Let the PR's link check run green before requesting review.
+
+## After the release
+
+- Confirm each consumer's refresh lane is enabled and produced a PR at its next
+  scheduled run; a disabled refresh lane is the one failure the tools can't
+  signal until `max_cache_age` fires.
+- Close the release's tracking issues and milestone, if any.
+
+<!-- prettier-ignore-start -->
+[`publish.yaml`]: ../.github/workflows/publish.yaml
+[chalin/docsy-starter]: https://github.com/chalin/docsy-starter
+[google/docsy-example]: https://github.com/google/docsy-example
+[google/docsy]: https://github.com/google/docsy
+[open-telemetry/opentelemetry.io]: https://github.com/open-telemetry/opentelemetry.io
+<!-- prettier-ignore-end -->
