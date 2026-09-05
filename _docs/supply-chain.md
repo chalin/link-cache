@@ -28,8 +28,9 @@ this repo: it can rewrite the lock and pull newer versions.
 ## `.npmrc` controls
 
 The committed [`.npmrc`][] applies to every install, local or CI. Two controls
-are newer than the npm that Node 24.0 bundled and are ignored silently by older
-versions: `min-release-age` needs npm 11.10, `strict-allow-scripts` npm 11.16.
+are newer than the npm that Node 24.0 bundled; older versions warn about the
+unknown key and skip it: `min-release-age` needs npm 11.10,
+`strict-allow-scripts` npm 11.16.
 
 - `min-release-age`: when npm resolves dependencies (a bump, an `npm update`), a
   version must have aged on the registry for the configured cooldown before it

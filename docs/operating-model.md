@@ -38,11 +38,11 @@ command with the same projection.
   run's outcome depends only on URLs the cache doesn't vouch for, and so does
   its cache diff, apart from one-time normalization of hand edits (resolved
   `+Nd` sugar, a dated `when`-less seed) or of a legacy file.
-- **Refresh lane**: a scheduled workflow that prunes the N oldest entries
-  (`npm run link-cache -- --prune N`; lapsed `expires` go too), runs the
-  checker, and opens a PR with the cache changes. Live URLs come back with fresh
-  timestamps, dead ones with failure words for triage. Size N so the cache
-  rotates fully every few weeks.
+- **Refresh lane**: a scheduled workflow that prunes the _`COUNT`_ oldest
+  entries (`npm run link-cache -- --prune` _`COUNT`_; lapsed `expires` go too),
+  runs the checker, and opens a PR with the cache changes. Live URLs come back
+  with fresh timestamps, dead ones with failure words for triage. Size _`COUNT`_
+  so the cache rotates fully every few weeks.
 
 ## `max_cache_age`: the last-resort net
 

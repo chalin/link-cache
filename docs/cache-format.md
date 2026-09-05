@@ -33,9 +33,10 @@ run time, see [Operating model](operating-model.md).
 
 The empty cache is `{}` (a zero-byte file is rejected). The multi-line shape is
 deliberate: field-per-line entries keep concurrent updates merging cleanly under
-git's normal 3-way merge. On a conflict, resolve either way and rerun the check:
-the next run re-normalizes the file. Don't add a `merge=union` gitattribute: on
-a multi-line file it can interleave entries into invalid JSON.
+git's normal 3-way merge. On a conflict, keep both sides' entries (the file is
+keyed by URL, so nothing else competes) and rerun the check: the next run
+re-normalizes the file. Don't add a `merge=union` gitattribute: on a multi-line
+file it can interleave entries into invalid JSON.
 
 ## Keys
 

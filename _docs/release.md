@@ -50,20 +50,24 @@ version, and release again; never move or delete a published tag.
 
 ## Consumer bumps
 
-Consumers pin the package, so each release is followed by bump PRs. Where the
-consumer's `.npmrc` sets a cooldown (`min-release-age=7`: docsy, docsy-starter,
-opentelemetry.io), a version younger than a week is rejected, so open those
-bumps a week after publishing, or wait out the cooldown in the bump branch;
-docsy-example has no cooldown. Current consumers and what a bump touches:
+Consumers depend on the package, most of them pinned exactly, so each release is
+followed by bump PRs. Where the consumer's `.npmrc` sets a cooldown
+(`min-release-age=7`: docsy, docsy-starter, opentelemetry.io), a version younger
+than a week is rejected, so open those bumps a week after publishing, or wait
+out the cooldown in the bump branch; docsy-example has no cooldown. Current
+consumers and what a bump touches:
 
 - **[google/docsy][]** (docsy.dev): the `docsy.dev/package.json` pin, the PR
   check workflow, and the scheduled refresh workflow; the repo's maintainer
   notes describe the cache semantics.
 - **[google/docsy-example][]**: `package.json` pin and its check scripts; no
   refresh lane.
-- **[chalin/docsy-starter][]**: `package.json` pin. It is the reference wiring
-  other sites copy, so its `lychee.toml` comments must match the released
-  semantics.
+- **[chalin/docsy-starter][]**: `package.json` dependency (a caret range, so the
+  bump is a lockfile refresh). It is the reference wiring other sites copy, so
+  its `lychee.toml` comments must match the released semantics.
+- **[theupdateframework/theupdateframework.io][]**: `package.json` dependency
+  (caret range) and its check scripts; a contributor repo, so the bump goes in
+  as an upstream PR.
 - **[open-telemetry/opentelemetry.io][]**: `package.json` pin, the PR check
   workflow, the refresh workflow, and helper scripts under `scripts/lychee/`.
   The largest cache: verify its double-check flow against any change to
@@ -71,9 +75,10 @@ docsy-example has no cooldown. Current consumers and what a bump touches:
 
 For each bump PR:
 
-1. Pin the new version, then run the repo's safe install and its link-check
-   script once to let the tools rewrite the cache file (schema migrations land
-   in this run).
+1. Bump the manifest and refresh the committed lockfile together (the consumers'
+   safe installs are `npm ci`, which fails on a manifest-only change), then run
+   the safe install and the link-check script once to let the tools rewrite the
+   cache file (schema migrations land in this run).
 2. Drop any flag the release removed: workflow runs fail loudly on unknown
    flags, so the CI result confirms the sweep.
 3. Update the repo's own docs wherever they describe cache semantics.
@@ -93,4 +98,5 @@ For each bump PR:
 [google/docsy-example]: https://github.com/google/docsy-example
 [open-telemetry/opentelemetry.io]: https://github.com/open-telemetry/opentelemetry.io
 [`publish.yaml`]: ../.github/workflows/publish.yaml
+[theupdateframework/theupdateframework.io]: https://github.com/theupdateframework/theupdateframework.io
 <!-- prettier-ignore-end -->

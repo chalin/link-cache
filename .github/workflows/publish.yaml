@@ -1,7 +1,7 @@
 name: publish
 
-# Auth: npm trusted publishing (OIDC). Rationale: _docs/supply-chain.md;
-# one-time setup: _docs/release.md.
+# Auth: npm trusted publishing (OIDC). Rationale in _docs/supply-chain.md,
+# one-time setup in _docs/release.md.
 
 on:
   release:

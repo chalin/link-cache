@@ -55,8 +55,8 @@ npm run link-cache -- --summary  # cache stats
 - Commit `link-cache.jsonc`; gitignore `.lycheecache`.
 - Run the check unflagged in PR checks.
 - Add a scheduled workflow that prunes the oldest entries
-  (`npm run link-cache -- --prune N`), re-checks, and opens a PR with the
-  changes.
+  (`npm run link-cache -- --prune` _`COUNT`_, sized so the cache rotates every
+  few weeks), re-checks, and opens a PR with the changes.
 
 ## Documentation
 
