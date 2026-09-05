@@ -18,8 +18,10 @@ absent, `max_cache_age` governs.**
 - An entry **with** `expires` projects a fresh timestamp, so it is always
   served, **lapsed or not**: PR checks never stop serving a seed. While the
   `expires` holds (or forever, with `never`), the entry is also exempt from
-  age-ordered pruning. A lapse is normally retired by `link-cache --prune`,
-  which drops the entry; the one exception is a forced live re-check (see
+  age-ordered pruning. A lapse is normally retired by the next prune, which
+  drops the entry; the check that follows re-adds a live URL as a plain `lychee`
+  entry (or records a failure word), so the override is one-shot and the entry's
+  comments go with it. The one exception is a forced live re-check (see
   [Merge-back](#merge-back)).
 - Only 2xx results project. Failure words and non-2xx results re-check on every
   run.
@@ -39,9 +41,6 @@ command with the same projection.
   checker, and opens a PR with the cache changes. Live URLs come back with fresh
   timestamps, dead ones with failure words for triage. Size N so the cache
   rotates fully every few weeks.
-
-Freshness comes from that prune: a pruned URL is uncached, so the next run
-verifies it.
 
 ## `max_cache_age`: the last-resort net
 
@@ -83,8 +82,8 @@ For the full contract, see `mergeBack` in `lib/cache.mjs`.
 Prefer URL-scoped mechanisms (`exclude` patterns, or manual seeds in the owned
 cache) for URL-specific problems, and reserve lychee's `accept` list for
 statuses that are acceptable **site-wide**: an accepted status is recorded in
-the committed cache for every URL that returns it. Note that `accept` buys no
-caching: an accepted non-2xx URL is re-checked on every run.
+the committed cache for every URL that returns it. `accept` buys no caching: an
+accepted non-2xx URL is re-checked on every run.
 
 Forwarded lychee flags apply for one run: for example, `--max-cache-age 0s`
 makes lychee discard the whole cache file by age, so even `expires` entries

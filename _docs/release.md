@@ -4,7 +4,9 @@ title: Release runbook
 
 How a `link-cache` version reaches npm, and what follows in the consuming sites.
 The only publish trigger is a GitHub release. For why the workflow is shaped as
-it is, see [Supply-chain posture](supply-chain.md).
+it is, see [Supply-chain posture](supply-chain.md). One-time setup, already done
+for this package: on npmjs.com, the package's Settings > Trusted Publisher names
+this repo and [`publish.yaml`][] as the publisher.
 
 ## Before tagging
 
@@ -49,12 +51,11 @@ version, and release again; never move or delete a published tag.
 
 ## Consumer bumps
 
-Consumers pin the package (the larger sites exactly), so each release is
-followed by bump PRs. Where the consumer's `.npmrc` sets a cooldown
-(`min-release-age=7`: docsy, docsy-starter, opentelemetry.io), a version younger
-than a week is rejected, so open those bumps a week after publishing, or wait
-out the cooldown in the bump branch; docsy-example has no cooldown. Current
-consumers and what a bump touches:
+Consumers pin the package, so each release is followed by bump PRs. Where the
+consumer's `.npmrc` sets a cooldown (`min-release-age=7`: docsy, docsy-starter,
+opentelemetry.io), a version younger than a week is rejected, so open those
+bumps a week after publishing, or wait out the cooldown in the bump branch;
+docsy-example has no cooldown. Current consumers and what a bump touches:
 
 - **[google/docsy][]** (docsy.dev): `package.json` pin, the PR check workflow,
   and the scheduled refresh workflow; the repo's maintainer notes describe the

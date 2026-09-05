@@ -23,9 +23,8 @@ Wire the bins into `package.json` scripts under bare names and run them through
 
 Runs in the current directory (your site root) over the built `public/` output,
 projecting the owned cache and folding lychee's results back per
-[Operating model](operating-model.md); without a `link-cache.jsonc`,
-`.lycheecache` is normalized in place (legacy mode). `--import` converts an
-existing `.lycheecache` to `link-cache.jsonc` instead (procedure:
+[Operating model](operating-model.md). `--import` converts an existing
+`.lycheecache` to `link-cache.jsonc` instead (procedure:
 [From a committed `.lycheecache`](migrate.md#from-a-committed-lycheecache-to-the-owned-cache)).
 
 Requirements:
@@ -50,20 +49,9 @@ false-clean, not a pass).
 ## `link-cache`
 
 Inspects and prunes a link cache: the owned `link-cache.jsonc` (default when
-present) or a legacy lychee CSV like `.lycheecache`. Behavior that shapes a
-refresh workflow:
-
-- A prune drops every in-scope entry whose `expires` has lapsed, then the N
-  oldest without an `expires`; entries whose `expires` holds are exempt.
-  `--prune 0` drops lapsed entries only.
-- A `--match` scope shields out-of-scope entries from the operations, never from
-  a prune's rewrite: they always survive intact.
-- Listing and pruning select differently: `--list` shows the oldest entries by
-  timestamp, held `expires` rows included, while a prune skips those rows. So
-  `-l 5 -p 5` previews the five oldest, not necessarily the five pruned.
-- `--summary` and `--list` are read-only; a prune that drops nothing still
-  writes back any normalization the read applied (resolved `+Nd` sugar,
-  defaulted `when`, legacy fields).
+present) or a legacy lychee CSV like `.lycheecache`. Its `--help` covers the
+operations and their order semantics; how the refresh lane uses a prune is in
+[Operating model](operating-model.md#two-lanes).
 
 ## `refcache`
 
@@ -72,11 +60,9 @@ identically.
 
 ## Examples
 
-With the scripts from the [README quickstart](../README.md#quickstart):
+Beyond the [README quickstart](../README.md#quickstart)'s check and summary:
 
 ```sh
-npm run check:links
-npm run link-cache -- --summary
 npm run link-cache -- --match 'github\.com' --prune 10  # 10 oldest matching
 npm run link-cache -- --prune 0  # lapsed entries only
 ```

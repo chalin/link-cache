@@ -71,17 +71,14 @@ re-check.
     that rewrites the file (the check, or a prune), so run the check before
     committing to pin the date. `+0d` resolves already lapsed: "re-verify at the
     next refresh".
-  - One-shot: a lapsed entry is dropped by the next `link-cache --prune`, and
-    the check that follows re-adds a live URL as a plain `lychee` entry (or
-    records a failure word). The entry's comments go with it; re-seed from the
-    refresh PR if the rationale still matters.
 
 ## Comments
 
 Each `//` comment attaches to the entry below it and survives re-confirmations
 and recorded failures (the rationale still explains the URL); an entry replaced
 by a different live HTTP result drops its comments (a stale rationale is worse
-than none).
+than none), as does an entry re-added after its `expires` lapsed; re-seed from
+the refresh PR if the rationale still matters.
 
 ## Compatibility
 
