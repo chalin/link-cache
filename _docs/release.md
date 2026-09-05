@@ -46,9 +46,10 @@ repo and [`publish.yaml`][] as the publisher.
    package page resolve (npm rewrites them to this repo).
 
 If the workflow fails, nothing has reached npm: re-run the failed job first. If
-the failure needs a code fix, delete the unpublished GitHub release and its tag,
-fix on `main`, bump the patch version, and release again; a tag that has been
-published is never moved or deleted.
+the failure needs a code fix, leave the tag and release in place (a GitHub
+install may already have resolved the tag), fix on `main`, bump the patch
+version, release again, and point the orphaned release's notes at its successor.
+Never move or delete a tag.
 
 ## Consumer bumps
 
