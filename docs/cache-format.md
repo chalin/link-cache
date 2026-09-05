@@ -67,9 +67,10 @@ re-check.
   and pruning: [Operating model](operating-model.md#one-rule)).
   - File grammar: `YYYY-MM-DD`, which lapses at the start of that UTC day (write
     `2026-10-01` to hold a seed through September 30), or `never`.
-  - Input sugar: `+Nd` resolves to the date N days from whichever run reads it
-    first, so run the check before committing to pin the date. `+0d` resolves
-    already lapsed: "re-verify at the next refresh".
+  - Input sugar: `+Nd` resolves to the date N days out, written by the first run
+    that rewrites the file (the check, or a prune), so run the check before
+    committing to pin the date. `+0d` resolves already lapsed: "re-verify at the
+    next refresh".
   - One-shot: a lapsed entry is dropped by the next `link-cache --prune`, and
     the check that follows re-adds a live URL as a plain `lychee` entry (or
     records a failure word). The entry's comments go with it; re-seed from the
@@ -90,3 +91,6 @@ than none).
   `manual` entry **without** `expires` ages and rotates like any other entry;
   permanent trust is written `"expires": "never"`, never implied by a missing
   field.
+- 0.5.0 held an `expires` date through the end of its UTC day; since 0.6.0 the
+  date lapses at the day's start, so an existing dated seed is re-verified one
+  refresh earlier at most.
