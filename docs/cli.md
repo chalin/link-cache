@@ -16,7 +16,7 @@ the `PATH`) and run them through `npm run`; each also answers `--help`.
 
 ## `lychee-norm-cache`
 
-```
+```text
 lychee-norm-cache [--import] [LYCHEE_ARGS...]
 ```
 
@@ -58,7 +58,7 @@ hard on exit 2 (the check didn't actually run).
 
 ## `link-cache`
 
-```
+```text
 link-cache [CACHE_FILE] [options]
 ```
 
