@@ -360,6 +360,12 @@ const LAPSED = block(
   'lychee', // lapse drops via-regardless
   '2001-01-01',
 );
+const TODAY = block(
+  'https://today.example/',
+  NOW - 2 * DAY,
+  'manual',
+  '2001-09-09', // NOW's own date: lapsed under the start-of-day cutoff only
+);
 const OLD = block('https://old.example/', NOW - 300 * DAY, 'lychee');
 const MID = block('https://mid.example/', NOW - 200 * DAY, 'browser');
 const NEW = block('https://new.example/', NOW - 100 * DAY, 'lychee');
@@ -427,7 +433,7 @@ test('prune with nothing lapsed and --prune 0 rewrites nothing', () => {
 
 test('a prune that drops nothing still persists normalization', () => {
   // Input: unresolved sugar and no when; rationale at runOps's write gate.
-  const text = `{\n  "https://a.example/": { "result": 200, "via": "manual", "expires": "+0d" },\n}\n`;
+  const text = `{\n  "https://a.example/": { "result": 200, "via": "manual", "expires": "+1d" },\n}\n`;
   const parsed = parseOwnedCache(text, { now: NOW });
   const { writeText, pruned } = runOps(
     parsed,
@@ -437,10 +443,23 @@ test('a prune that drops nothing still persists normalization', () => {
   assert.equal(pruned, 0, 'the prune count is zero');
   assert.match(
     writeText,
-    /"expires": "2001-09-09"/,
+    /"expires": "2001-09-10"/,
     'the sugar is written resolved',
   );
   assert.match(writeText, /"when": "2001-09-09T01:46:40Z"/, 'when is written');
+});
+
+test('a +0d seed is dropped by the prune that resolves it', () => {
+  // Input: unresolved +0d sugar; rationale at expiryCutoff.
+  const text = `{\n  "https://a.example/": { "result": 200, "via": "manual", "expires": "+0d" },\n}\n`;
+  const parsed = parseOwnedCache(text, { now: NOW });
+  const { writeText, pruned } = runOps(
+    parsed,
+    [{ kind: 'prune', value: '0' }],
+    { now: NOW },
+  );
+  assert.equal(pruned, 1, 'the seed is pruned');
+  assert.equal(writeText, '{}\n', 'the cache is written empty');
 });
 
 test('list shows each entry expiry, so a prune preview reads honestly', () => {
@@ -457,6 +476,26 @@ test('list shows each entry expiry, so a prune preview reads honestly', () => {
     /lapsed\.example\/\s+expires 2001-01-01 \(lapsed\)$/,
     'a lapsed date is marked',
   );
+});
+
+test('list marks a same-day expiry lapsed, and prune drops it', () => {
+  const parsed = cacheOf(HOLDS, TODAY);
+  const { output, writeText, pruned } = runOps(
+    parsed,
+    [
+      { kind: 'list', value: '2' },
+      { kind: 'prune', value: '0' },
+    ],
+    { now: NOW },
+  );
+  assert.match(
+    output,
+    /today\.example\/\s+expires 2001-09-09 \(lapsed\)$/m,
+    'the same-day date is marked lapsed',
+  );
+  assert.equal(pruned, 1, 'the same-day entry is pruned');
+  assert.match(writeText, /holds\.example/, 'the holding entry survives');
+  assert.ok(!writeText.includes('today.example'), 'the same-day entry is gone');
 });
 
 // --- --match scoping ---
