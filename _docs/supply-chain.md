@@ -27,9 +27,9 @@ this repo: it can rewrite the lock and pull newer versions.
 
 ## `.npmrc` controls
 
-The committed [`.npmrc`][] applies to every install, local or CI, on npm 11.10
-or later (`min-release-age` is newer than the npm that Node 24.0 bundled; older
-npm versions ignore it silently):
+The committed [`.npmrc`][] applies to every install, local or CI. Two controls
+are newer than the npm that Node 24.0 bundled and are ignored silently by older
+versions: `min-release-age` needs npm 11.10, `strict-allow-scripts` npm 11.16.
 
 - `min-release-age`: when npm resolves dependencies (a bump, an `npm update`), a
   version must have aged on the registry for the configured cooldown before it
@@ -50,15 +50,17 @@ npm versions ignore it silently):
 - Actions in [`publish.yaml`][], the workflow with publish authority, are pinned
   to full commit SHAs, with the version in a trailing comment for readability (a
   tag can be moved; a SHA cannot). [`check.yaml`][] still uses tag pins.
-- The publish job installs nothing and runs `npm publish --ignore-scripts`. The
-  check workflow runs on every pull request and on pushes to `main`, but nothing
-  enforces it on the release commit: the [release runbook](release.md) makes a
-  green `main` the precondition for tagging. Re-running an install under the job
-  that holds the OIDC `id-token` would only let registry-delivered code run with
-  publish authority.
+- The publish job installs nothing and runs `npm publish --ignore-scripts` (the
+  flag repeats the `.npmrc` control at the one step that runs with publish
+  authority, so it holds even if the file regresses). The check workflow runs on
+  every pull request and on pushes to `main`, but nothing enforces it on the
+  release commit: the [release runbook](release.md) makes a green `main` the
+  precondition for tagging. Re-running an install under the job that holds the
+  OIDC `id-token` would only let registry-delivered code run with publish
+  authority.
 - Publishing is by npm trusted publishing (OIDC from this repo's workflow):
-  there is no long-lived token to leak, and every published version carries
-  provenance linking it to the workflow run.
+  there is no long-lived token to leak, and every version this workflow
+  publishes (0.4.0 onward) carries provenance linking it to the workflow run.
 
 ## The `npx` fallback
 
@@ -82,6 +84,6 @@ so the check itself runs read-only.
 <!-- prettier-ignore-start -->
 [`.npmrc`]: ../.npmrc
 [`check.yaml`]: ../.github/workflows/check.yaml
-[`publish.yaml`]: ../.github/workflows/publish.yaml
 [otel-supply-chain]: https://opentelemetry.io/site/design/supply-chain-security/
+[`publish.yaml`]: ../.github/workflows/publish.yaml
 <!-- prettier-ignore-end -->

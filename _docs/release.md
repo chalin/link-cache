@@ -12,12 +12,11 @@ this repo and [`publish.yaml`][] as the publisher.
 
 1. `main` holds everything meant for the release (docs and code land before the
    tag, not after), and its head's [`check.yaml`][] run is green. This is the
-   gate: no repo rule enforces a check on the commit the publish workflow
-   releases.
-2. `package.json` `version` is the release version (the publish workflow refuses
-   a tag that doesn't match it). If a bump is needed, land it in its own commit
-   with `npm version X.Y.Z --no-git-tag-version`, which moves the lockfile's
-   copy too.
+   gate (why: [Supply-chain posture](supply-chain.md)).
+2. `package.json` `version` is the release version, _`VERSION`_ below (the
+   publish workflow refuses a tag that doesn't match it). If a bump is needed,
+   land it in its own commit with `npm version` _`VERSION`_
+   `--no-git-tag-version`, which moves the lockfile's copy too.
 3. Locally, from a clean checkout of `main`:
 
    ```sh
@@ -35,8 +34,8 @@ this repo and [`publish.yaml`][] as the publisher.
 
 ## Tag and release
 
-1. Tag the merge commit: `git tag vX.Y.Z MERGE_SHA` and
-   `git push origin vX.Y.Z`.
+1. Tag the merge commit, _`MERGE_SHA`_: `git tag v`_`VERSION`_ _`MERGE_SHA`_,
+   then `git push origin v`_`VERSION`_.
 2. Create the GitHub release from the tag, with notes: a one-line summary,
    behavior changes and any migration steps, then the merged PRs. The
    `release: published` event triggers [`publish.yaml`][].
@@ -88,10 +87,10 @@ For each bump PR:
 - Close the release's tracking issues and milestone, if any.
 
 <!-- prettier-ignore-start -->
-[`check.yaml`]: ../.github/workflows/check.yaml
-[`publish.yaml`]: ../.github/workflows/publish.yaml
 [chalin/docsy-starter]: https://github.com/chalin/docsy-starter
-[google/docsy-example]: https://github.com/google/docsy-example
+[`check.yaml`]: ../.github/workflows/check.yaml
 [google/docsy]: https://github.com/google/docsy
+[google/docsy-example]: https://github.com/google/docsy-example
 [open-telemetry/opentelemetry.io]: https://github.com/open-telemetry/opentelemetry.io
+[`publish.yaml`]: ../.github/workflows/publish.yaml
 <!-- prettier-ignore-end -->

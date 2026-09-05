@@ -15,7 +15,7 @@ absent, `max_cache_age` governs.**
 
 - An entry **without** `expires` projects its real `when`, so lychee's
   `max_cache_age` decides whether it is served or re-checked.
-- An entry **with** `expires` projects a fresh timestamp, so it is always
+- A 2xx entry **with** `expires` projects a fresh timestamp, so it is always
   served, **lapsed or not**: PR checks never stop serving a seed. While the
   `expires` holds (or forever, with `never`), the entry is also exempt from
   age-ordered pruning. A lapse is normally retired by the next prune, which
@@ -33,9 +33,10 @@ command with the same projection.
 
 - **PR lane** (CI on a pull request, or a maintainer's local run): run the
   checker unflagged. It checks URLs the cache doesn't vouch for (absent, or with
-  a non-2xx result) and entries older than `max_cache_age` (under a healthy
-  refresh lane, none). So a PR run's outcome and its cache diff depend only on
-  what the PR changed.
+  a non-2xx result) and entries older than `max_cache_age` (none, under a
+  healthy refresh lane: [below](#max_cache_age-the-last-resort-net)). So a PR
+  run's outcome and its cache diff depend only on URLs the cache doesn't vouch
+  for, never on the vouched rest.
 - **Refresh lane**: a scheduled workflow that prunes the N oldest entries
   (`npm run link-cache -- --prune N`; lapsed `expires` go too), runs the
   checker, and opens a PR with the cache changes. Live URLs come back with fresh
@@ -57,13 +58,14 @@ refresh lane, never the age.
 After lychee runs, results fold back into the owned file on positive evidence
 only:
 
-- A re-check that **changes** an entry's result replaces the entry: provenance
-  moves to `lychee`; comments and `expires` go with the old claim. A live
-  re-check of an entry whose `expires` has **lapsed** replaces it the same way,
-  even when the result is unchanged (the override is spent). Such a re-check
-  happens only when forced (`--max-cache-age 0s`), and a forced run that
-  completes within the same second as the projection reads as a cache hit
-  instead, leaving the entry for the next prune.
+- A live re-check that returns a **different success status** replaces the
+  entry: provenance moves to `lychee`; comments and `expires` go with the old
+  claim (a failure instead follows the failing rule below). A live re-check of
+  an entry whose `expires` has **lapsed** replaces it the same way, even when
+  the result is unchanged (the override is spent). Such a re-check happens only
+  when forced (`--max-cache-age 0s`), and a forced run that completes within the
+  same second as the projection reads as a cache hit instead, leaving the entry
+  for the next prune.
 - A **re-confirmation** leaves provenance-bearing entries (`manual`, named
   resolvers) untouched. A live re-check of a `lychee`-owned entry refreshes its
   `when` to record recency; a cache hit is not a re-check and leaves `when`
@@ -87,4 +89,4 @@ accepted non-2xx URL is re-checked on every run.
 
 Forwarded lychee flags apply for one run: for example, `--max-cache-age 0s`
 makes lychee discard the whole cache file by age, so even `expires` entries
-re-check.
+re-check (with the same-second caveat under [Merge-back](#merge-back)).

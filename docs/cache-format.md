@@ -61,10 +61,10 @@ re-check.
 - **`via`** (required): the resolver that set the result, one of `lychee`,
   `manual` (hand-seeded), or a named specialized resolver (for example, a
   browser-grade probe). Provenance says who established the result; it implies
-  nothing about how long the result stands.
-- **`expires`** (optional, any entry): how long the result stands, overriding
-  lychee's `max_cache_age` for this entry. For the rule and its two effects,
-  serving and pruning, see [Operating model](operating-model.md#one-rule).
+  nothing about the entry's lifetime.
+- **`expires`** (optional, any entry): the per-entry lifetime override of
+  lychee's `max_cache_age`. For the rule and its two effects, serving and
+  pruning, see [Operating model](operating-model.md#one-rule).
   - File grammar: `YYYY-MM-DD`, which lapses at the start of that UTC day (write
     `2026-10-01` to hold a seed through September 30), or `never`.
   - Input sugar: `+Nd` resolves to the date N days out, written by the first run
@@ -74,11 +74,10 @@ re-check.
 
 ## Comments
 
-Each `//` comment attaches to the entry below it and survives re-confirmations
-and recorded failures (the rationale still explains the URL); an entry replaced
-by a different live HTTP result drops its comments (a stale rationale is worse
-than none), as does an entry re-added after its `expires` lapsed; re-seed from
-the refresh PR if the rationale still matters.
+Each `//` comment attaches to the entry below it and travels with it through
+[merge-back](operating-model.md#merge-back): it survives while the entry does
+and goes when the entry is replaced (a stale rationale is worse than none).
+Re-seed from the refresh PR if the rationale still matters.
 
 ## Compatibility
 

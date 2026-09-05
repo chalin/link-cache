@@ -42,10 +42,11 @@ htmltest parity before touching anything online:
 
 ### Seed the cache online
 
-- Lychee reads only `GITHUB_TOKEN` or `--github-token`: `gh auth login` alone
-  does nothing. `lychee-norm-cache` bridges the `gh` token for local runs; in
-  CI, set `GITHUB_TOKEN` on the check step. Without a token, a green check may
-  be green only because the cache covers every github.com URL.
+- Lychee reads a token from `GITHUB_TOKEN`, `--github-token`, or `github_token`
+  in `lychee.toml`: `gh auth login` alone does nothing. `lychee-norm-cache`
+  bridges the `gh` token for local runs; in CI, set `GITHUB_TOKEN` on the check
+  step. Without a token, a green check may be green only because the cache
+  covers every github.com URL.
 - If github.com still throttles, look for per-page query-string variants (for
   example, `issues/new?title=PAGE` footer links) and exclude the pattern rather
   than seeding hundreds of variants.
@@ -110,8 +111,8 @@ htmltest parity before touching anything online:
   success.
 - Links to files the PR itself adds 404 until merge: name such paths as code, or
   seed the entry deliberately.
-- Validate through the consumer path (`npm run SCRIPT`), not only a direct
-  `node PATH/index.mjs`.
+- Validate through the consumer path (`npm run` _`SCRIPT`_, the script that
+  wires the bin), not only a direct `node` run of the bin's entry file.
 
 ## From a committed `.lycheecache` to the owned cache
 

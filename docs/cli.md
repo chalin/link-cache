@@ -38,8 +38,8 @@ Requirements:
 Anything the wrapper doesn't recognize passes through to lychee (`lychee --help`
 lists the options; for example `--offline`, or `--max-cache-age` to override
 `lychee.toml` for one run), with two exceptions: `--cache` is added when absent,
-and `--cache=false` is rejected with an owned cache, since a cacheless run would
-erase every projected entry on merge-back.
+and `--cache=false` is rejected with an owned cache, since without lychee's
+cache file nothing is served from the owned cache and no results fold back.
 
 For CI wrappers: a warn-style wrapper can soften the dead-links exit (1,
 advisory link rot) but must still fail hard on the preflight exit (2), which
@@ -63,13 +63,13 @@ identically.
 Beyond the [README quickstart](../README.md#quickstart)'s check and summary:
 
 ```sh
-npm run link-cache -- --match 'github\.com' --prune 10  # 10 oldest matching
+npm run link-cache -- --match "github\.com" --prune 10  # lapsed, then 10 oldest
 npm run link-cache -- --prune 0  # lapsed entries only
 ```
 
 <!-- prettier-ignore-start -->
 [`check/index.mjs`]: ../check/index.mjs
+[gh]: https://cli.github.com/
 [`link-cache/index.mjs`]: ../link-cache/index.mjs
 [lychee]: https://github.com/lycheeverse/lychee
-[gh]: https://cli.github.com/
 <!-- prettier-ignore-end -->

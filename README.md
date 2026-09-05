@@ -43,10 +43,12 @@ Wire the bins into your `package.json` scripts, using bare names (`npm run` puts
 }
 ```
 
-Build your site, set `max_cache_age` in `lychee.toml` (a year is typical), then:
+Create the owned cache as an empty object, build your site, set `max_cache_age`
+in `lychee.toml` (a year is typical), then check:
 
 ```sh
-npm run check:links              # creates or updates link-cache.jsonc
+echo '{}' > link-cache.jsonc     # once; without it the check runs cache-less
+npm run check:links              # fills link-cache.jsonc
 npm run link-cache -- --summary  # cache stats
 ```
 
