@@ -20,17 +20,20 @@ the `PATH`) and run them through `npm run`; each also answers `--help`.
 lychee-norm-cache [--import] [LYCHEE_ARGS...]
 ```
 
-Runs in the current directory (your site root) over the built `public/` output.
-With a committed `link-cache.jsonc`, the `.lycheecache` handed to lychee is
-derived from it before the run and folded back afterwards (see
-[Operating model](operating-model.md)); otherwise `.lycheecache` is normalized
-in place (legacy mode). Extra arguments pass through to lychee; run
-`lychee --help` for those (for example `--offline`, or `--max-cache-age` to
-override `lychee.toml` for one run).
+Runs in the current directory (your site root) over the built `public/` output,
+projecting the owned cache and folding lychee's results back per
+[Operating model](operating-model.md); without a `link-cache.jsonc`,
+`.lycheecache` is normalized in place (legacy mode).
 
 - `--import`: convert an existing `.lycheecache` to `link-cache.jsonc` and exit.
-  For the procedure, see [Migrating to lychee](migrate.md).
+  For the procedure, see
+  [From a committed `.lycheecache`](migrate.md#from-a-committed-lycheecache-to-the-owned-cache).
 - `-h`, `--help`: show help.
+- Anything else passes through to lychee (`lychee --help` lists the options; for
+  example `--offline`, or `--max-cache-age` to override `lychee.toml` for one
+  run), with two exceptions: `--cache` is added when absent, and `--cache=false`
+  is rejected with an owned cache, since a cacheless run would erase every
+  projected entry on merge-back.
 
 Requirements:
 
@@ -83,22 +86,17 @@ summary. A flag may not be repeated.
 Options run in the order given, over the evolving cache: `-l 5 -p 5` lists the 5
 oldest before pruning them; `-p 5 -l 5` lists the next 5 after pruning.
 
-Exit codes: `0` success; `1` unreadable or malformed cache file; `2` usage
-error.
+Exit codes: `0` success; `1` unreadable or malformed owned cache file (a legacy
+CSV's malformed lines are skipped and counted in the summary); `2` usage error.
 
 ## `refcache`
 
 Deprecated alias of `link-cache`; it prints a warning and then behaves
 identically.
 
-## Example scripts
+## Examples
 
-```json
-"scripts": {
-  "check:links": "lychee-norm-cache",
-  "link-cache": "link-cache"
-}
-```
+With the scripts from the [README quickstart](../README.md#quickstart):
 
 ```sh
 npm run check:links

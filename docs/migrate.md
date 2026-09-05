@@ -4,20 +4,23 @@ title: Migrating to lychee and link-cache
 
 Two migrations, in the order sites typically meet them: from [htmltest][] (with
 a committed `refcache.json`) to lychee, and from a committed `.lycheecache` to
-the owned `link-cache.jsonc`. A site starting fresh with lychee needs only the
-second half of [Wire the repo](#wire-the-repo).
+the owned `link-cache.jsonc`. A site starting fresh with lychee skips both: the
+[README quickstart](../README.md#quickstart) and [CI](#ci) below cover it.
 
 ## From htmltest to lychee
 
 ### Inventory the incumbent
 
-Catalog what htmltest carries: config (`.htmltest.yml`: `IgnoreDirs`,
-`IgnoreURLs`, `IgnoreInternalURLs`), the committed refcache and its refresh or
-prune scripts, CI wiring, skip markers (`data-proofer-ignore`, query-string
-markers), and Makefile or npm entry points. Every item needs a lychee
-disposition: ported, replaced, or dropped. Note which cache file is committed
-and which is derived; the switch may invert that, so `.gitignore` is part of the
-inventory.
+Catalog what htmltest carries; every item needs a lychee disposition: ported,
+replaced, or dropped.
+
+- Config: `.htmltest.yml` (`IgnoreDirs`, `IgnoreURLs`, `IgnoreInternalURLs`).
+- The committed refcache and its refresh or prune scripts. Note which cache file
+  is committed and which is derived; the switch may invert that, so `.gitignore`
+  is part of the inventory.
+- CI wiring.
+- Skip markers (`data-proofer-ignore`, query-string markers).
+- Makefile or npm entry points.
 
 ### Reach offline parity over the built site
 
@@ -67,7 +70,8 @@ htmltest parity before touching anything online:
   their meaning changes: workflows and contributor habits consume the name.
 - npm `--` forwarding carries one level per `--`: a script defined as
   `npm run inner` swallows forwarded arguments unless its definition ends with a
-  trailing `--`. Verify with `npm run check:links -- --version`.
+  trailing `--`. Verify with `npm run check:links -- --help`, which must print
+  the wrapper's usage (a swallowed flag runs the check instead).
 - Don't blanket-exclude on 403 or 429 as policy: bot walls aren't rot. Interim
   excludes are fine to ship; re-fetching 4xx URLs with browser-like headers is
   the follow-up.
@@ -117,10 +121,9 @@ npm run check:links -- --import   # .lycheecache -> link-cache.jsonc
 ```
 
 Then commit `link-cache.jsonc` and gitignore `.lycheecache`. If the CSV cache
-carried a `merge=union` gitattribute, drop it rather than moving it over: union
-merging proved ineffective in practice, and on a multi-line file it can
-interleave entries into invalid JSON. The owned cache merges with git's normal
-3-way merge; for conflict handling, see [The owned cache](cache-format.md).
+carried a `merge=union` gitattribute, drop it rather than moving it over (it
+proved ineffective on the CSV, and it corrupts the owned file:
+[The owned cache](cache-format.md#shape)).
 
 Workflow deltas are limited to the file's identity: artifact upload paths,
 cache-diff guards, and header comments that named `.lycheecache` now name

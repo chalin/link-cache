@@ -33,8 +33,8 @@ npm install --save-dev github:chalin/link-cache#semver:^0.6.0
 ## Quickstart
 
 Wire the bins into your `package.json` scripts, using bare names (`npm run` puts
-`node_modules/.bin` on the `PATH`; never `npx`, which can run a registry package
-of the same name):
+`node_modules/.bin` on the `PATH`; never `npx`, for the reason the
+[CLI reference](docs/cli.md) gives):
 
 ```json
 "scripts": {
@@ -50,15 +50,18 @@ npm run check:links              # check; creates or updates link-cache.jsonc
 npm run link-cache -- --summary  # cache stats (count, oldest, result, via, ages)
 ```
 
-Commit `link-cache.jsonc`; gitignore `.lycheecache`. Run the check unflagged in
-PR checks, and add a scheduled workflow that prunes the oldest entries
-(`link-cache --prune N`), re-checks, and opens a PR with the changes.
+Then:
+
+- Commit `link-cache.jsonc`; gitignore `.lycheecache`.
+- Run the check unflagged in PR checks.
+- Add a scheduled workflow that prunes the oldest entries
+  (`link-cache --prune N`), re-checks, and opens a PR with the changes.
 
 ## Documentation
 
-User docs, in [`docs/`](docs/):
+User docs, in `docs/`:
 
-- [The owned cache, `link-cache.jsonc`](docs/cache-format.md): file format,
+- [The owned cache: `link-cache.jsonc`](docs/cache-format.md): file format,
   fields, hand-seeding entries, `expires`.
 - [Operating model](docs/operating-model.md): the projection rule, the PR and
   refresh lanes, `max_cache_age`, merge-back.
@@ -66,7 +69,7 @@ User docs, in [`docs/`](docs/):
 - [Migrating to lychee and link-cache](docs/migrate.md): from htmltest, and from
   a committed `.lycheecache`.
 
-Maintainer docs, in [`_docs/`](_docs/):
+Maintainer docs, in `_docs/`:
 
 - [Release runbook](_docs/release.md)
 - [Supply-chain posture](_docs/supply-chain.md)

@@ -3,8 +3,8 @@ title: Release runbook
 ---
 
 How a `link-cache` version reaches npm, and what follows in the consuming sites.
-Publishing runs on GitHub Actions with npm trusted publishing (OIDC): nobody
-holds a publish token, and the only trigger is a GitHub release.
+The only publish trigger is a GitHub release; why the workflow is shaped as it
+is: [Supply-chain posture](supply-chain.md).
 
 ## Before tagging
 
@@ -34,13 +34,11 @@ holds a publish token, and the only trigger is a GitHub release.
 2. Create the GitHub release from the tag, with notes: a one-line summary,
    behavior changes and any migration steps, then the merged PRs. The
    `release: published` event triggers [`publish.yaml`][].
-3. Watch the workflow run. It checks out the tag, asserts the tag matches
-   `package.json`, and runs `npm publish --ignore-scripts` with `id-token`
-   permission. It installs nothing: the check workflow already gates every push,
-   and publishing needs no `node_modules`, so no registry-delivered code runs
-   with publish authority.
-4. Verify on npm: the version appears with a provenance badge, and
-   `npm view link-cache version` prints it.
+3. Watch the [`publish.yaml`][] run: it asserts the tag matches `package.json`
+   and publishes, with no install step.
+4. Verify on npm: the version appears with a provenance badge,
+   `npm view link-cache version` prints it, and the README's doc links on the
+   package page resolve (npm rewrites them to this repo).
 
 If the workflow fails after the tag exists, fix on `main`, bump the patch
 version, and release again; never move or delete a published tag.
