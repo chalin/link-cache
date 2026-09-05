@@ -66,16 +66,17 @@ Each entry records:
   re-check.
 - **`expires`** (optional, any entry): the per-entry override of lychee's
   `max_cache_age`. **Present, it governs; absent, `max_cache_age` governs.**
-  Written as `YYYY-MM-DD` (valid through the end of that UTC day) or `never`;
-  `+Nd` resolves to N days from whichever run reads it first, so run the check
-  (or `link-cache --prune 0`) before committing to fix the date. With `expires`
-  set, a 2xx entry is served in every lane; while the date holds (or forever,
-  with `never`) it is also exempt from age-ordered pruning. Once the date
-  passes, the next `link-cache --prune` drops the entry, and the next check
-  re-adds a live URL as a plain `lychee` entry (or records a failure word). Seed
-  2xx results only; for an expected non-2xx status, use `exclude` or `accept`
-  instead. A `manual` entry **without** `expires` ages and rotates like any
-  other entry (0.4.1 and 0.5.0 exempted every manual entry from pruning).
+  Written as `YYYY-MM-DD` (lapses at the start of that UTC day) or `never`;
+  `+Nd` resolves to the date N days from whichever run reads it first, so run
+  the check before committing to pin the date (`+0d` resolves already lapsed:
+  the next prune drops it, and the check that follows re-verifies the URL). With
+  `expires` set, a 2xx entry is served in every lane; while the date holds (or
+  forever, with `never`) it is also exempt from age-ordered pruning. Once the
+  date arrives, the next `link-cache --prune` drops the entry, and the next
+  check re-adds a live URL as a plain `lychee` entry (or records a failure
+  word). Seed 2xx results only; for an expected non-2xx status, use `exclude` or
+  `accept` instead. A `manual` entry **without** `expires` ages and rotates like
+  any other entry (0.4.1 and 0.5.0 exempted every manual entry from pruning).
 
 Lychee's own CSV cache, `.lycheecache`, is **derived**: `lychee-norm-cache`
 projects the owned cache into it before each run and folds lychee's results back

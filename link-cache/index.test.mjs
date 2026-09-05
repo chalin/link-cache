@@ -427,7 +427,7 @@ test('prune with nothing lapsed and --prune 0 rewrites nothing', () => {
 
 test('a prune that drops nothing still persists normalization', () => {
   // Input: unresolved sugar and no when; rationale at runOps's write gate.
-  const text = `{\n  "https://a.example/": { "result": 200, "via": "manual", "expires": "+0d" },\n}\n`;
+  const text = `{\n  "https://a.example/": { "result": 200, "via": "manual", "expires": "+1d" },\n}\n`;
   const parsed = parseOwnedCache(text, { now: NOW });
   const { writeText, pruned } = runOps(
     parsed,
@@ -437,10 +437,25 @@ test('a prune that drops nothing still persists normalization', () => {
   assert.equal(pruned, 0, 'the prune count is zero');
   assert.match(
     writeText,
-    /"expires": "2001-09-09"/,
+    /"expires": "2001-09-10"/,
     'the sugar is written resolved',
   );
   assert.match(writeText, /"when": "2001-09-09T01:46:40Z"/, 'when is written');
+});
+
+test('a +0d seed is dropped by the prune that resolves it', () => {
+  // Input: the "re-verify at the next refresh" spelling, committed unresolved;
+  // the refresh's prune must retire it that same day, or the seed outlives a
+  // whole refresh cycle.
+  const text = `{\n  "https://a.example/": { "result": 200, "via": "manual", "expires": "+0d" },\n}\n`;
+  const parsed = parseOwnedCache(text, { now: NOW });
+  const { writeText, pruned } = runOps(
+    parsed,
+    [{ kind: 'prune', value: '0' }],
+    { now: NOW },
+  );
+  assert.equal(pruned, 1, 'the seed is pruned');
+  assert.equal(writeText, '{}\n', 'the cache is written empty');
 });
 
 test('list shows each entry expiry, so a prune preview reads honestly', () => {
