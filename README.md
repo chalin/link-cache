@@ -66,19 +66,19 @@ Each entry records:
   re-check.
 - **`expires`** (optional, any entry): the per-entry override of lychee's
   `max_cache_age`. **Present, it governs; absent, `max_cache_age` governs.**
-  Written as `YYYY-MM-DD` (lapses at the start of that UTC day) or `never`.
-  `+Nd` is input sugar for the date N days out, resolved and written by the
-  first run that rewrites the file (the check, or a prune; `--list` and
-  `--summary` are read-only), so the entry lapses N UTC midnights after that
-  run; run the check before committing to pin the date. `+0d` resolves already
-  lapsed: the next prune drops it, and the check that follows re-verifies the
-  URL. With `expires` set, a 2xx entry is served in every lane; while the date
-  holds (or forever, with `never`) it is also exempt from age-ordered pruning.
-  Once the date arrives, the next `link-cache --prune` drops the entry, and the
-  next check re-adds a live URL as a plain `lychee` entry (or records a failure
-  word). Seed 2xx results only; for an expected non-2xx status, use `exclude` or
-  `accept` instead. A `manual` entry **without** `expires` ages and rotates like
-  any other entry (0.4.1 and 0.5.0 exempted every manual entry from pruning).
+  Written as `YYYY-MM-DD` or `never`. A date lapses at the start of that UTC day
+  (to hold a seed through September 30, write `2026-10-01`; 0.5.0 held it
+  through the day itself). With `expires` set, a 2xx entry is served in every
+  lane; while the date holds (or forever, with `never`) it is also exempt from
+  age-ordered pruning. Once it lapses, the next `link-cache --prune` drops the
+  entry, and the next check re-adds a live URL as a plain `lychee` entry (or
+  records a failure word). `+Nd` is input sugar for the date N days out,
+  resolved and written by the first run that rewrites the file (the check, or a
+  prune), so run the check before committing to pin the date; `+0d` is today's
+  date, already lapsed. Seed 2xx results only; for an expected non-2xx status,
+  use `exclude` or `accept` instead. A `manual` entry **without** `expires` ages
+  and rotates like any other entry (0.4.1 and 0.5.0 exempted every manual entry
+  from pruning).
 
 Lychee's own CSV cache, `.lycheecache`, is **derived**: `lychee-norm-cache`
 projects the owned cache into it before each run and folds lychee's results back

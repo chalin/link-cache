@@ -286,9 +286,10 @@ export function runOps(
   const didPrune = ops.some((op) => op.kind === 'prune');
   if (pruned > 0 || (didPrune && parsed.normalized)) {
     // Survivors are all unpruned entries, including those outside the --match
-    // scope (the scope shields entries from ops, never from the rewrite). A prune that drops nothing still persists a read that
-    // normalized the file (resolved sugar, defaulted `when`): otherwise a
-    // committed "+0d" re-resolves to "today" on every prune day.
+    // scope (the scope shields entries from ops, never from the rewrite). A
+    // prune that drops nothing still persists a read that normalized the file
+    // (resolved sugar, defaulted `when`): otherwise a committed "+7d" would
+    // re-resolve to a week out on every prune day and never lapse.
     const survivors = parsed.entries.filter((e) => !removed.has(e.index));
     if (parsed.kind === 'owned') {
       // Comments of surviving entries travel with them; pruned entries take

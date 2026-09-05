@@ -450,9 +450,7 @@ test('a prune that drops nothing still persists normalization', () => {
 });
 
 test('a +0d seed is dropped by the prune that resolves it', () => {
-  // Input: the "re-verify at the next refresh" spelling, committed unresolved;
-  // the refresh's prune must retire it that same day, or the seed outlives a
-  // whole refresh cycle.
+  // Input: unresolved +0d sugar; rationale at expiryCutoff.
   const text = `{\n  "https://a.example/": { "result": 200, "via": "manual", "expires": "+0d" },\n}\n`;
   const parsed = parseOwnedCache(text, { now: NOW });
   const { writeText, pruned } = runOps(
