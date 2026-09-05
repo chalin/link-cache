@@ -360,6 +360,12 @@ const LAPSED = block(
   'lychee', // lapse drops via-regardless
   '2001-01-01',
 );
+const TODAY = block(
+  'https://today.example/',
+  NOW - 2 * DAY,
+  'manual',
+  '2001-09-09', // NOW's own date: lapsed under the start-of-day cutoff only
+);
 const OLD = block('https://old.example/', NOW - 300 * DAY, 'lychee');
 const MID = block('https://mid.example/', NOW - 200 * DAY, 'browser');
 const NEW = block('https://new.example/', NOW - 100 * DAY, 'lychee');
@@ -472,6 +478,26 @@ test('list shows each entry expiry, so a prune preview reads honestly', () => {
     /lapsed\.example\/\s+expires 2001-01-01 \(lapsed\)$/,
     'a lapsed date is marked',
   );
+});
+
+test('list marks a same-day expiry lapsed, and prune drops it', () => {
+  const parsed = cacheOf(HOLDS, TODAY);
+  const { output, writeText, pruned } = runOps(
+    parsed,
+    [
+      { kind: 'list', value: '2' },
+      { kind: 'prune', value: '0' },
+    ],
+    { now: NOW },
+  );
+  assert.match(
+    output,
+    /today\.example\/\s+expires 2001-09-09 \(lapsed\)$/m,
+    'the same-day date is marked lapsed',
+  );
+  assert.equal(pruned, 1, 'the same-day entry is pruned');
+  assert.match(writeText, /holds\.example/, 'the holding entry survives');
+  assert.ok(!writeText.includes('today.example'), 'the same-day entry is gone');
 });
 
 // --- --match scoping ---
