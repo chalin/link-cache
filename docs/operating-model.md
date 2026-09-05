@@ -10,12 +10,16 @@ see [The owned cache](cache-format.md).
 
 Every run, `lychee-norm-cache` projects `link-cache.jsonc` into the
 `.lycheecache` CSV that lychee reads, runs lychee once, and folds lychee's
-results back. The projection follows one rule, the `expires` rule:
+results back. The projection follows one rule: **`expires` present, it governs;
+absent, `max_cache_age` governs.**
 
 - An entry **without** `expires` projects its real `when`, so lychee's
   `max_cache_age` decides whether it is served or re-checked.
-- An entry **with** `expires` (lapsed or not) projects a fresh timestamp, so it
-  is always served. Only `link-cache --prune` acts on a lapsed `expires`.
+- An entry **with** `expires` projects a fresh timestamp, so it is always
+  served, **lapsed or not**: PR checks never stop serving a seed. While the
+  `expires` holds (or forever, with `never`), the entry is also exempt from
+  age-ordered pruning. Only `link-cache --prune` acts on a lapse, by dropping
+  the entry.
 - Only 2xx results project. Failure words and non-2xx results re-check on every
   run.
 
@@ -36,7 +40,7 @@ command with the same projection.
   few weeks.
 
 Freshness comes from the refresh lane's prune, not from `max_cache_age`: a
-pruned URL is uncached, and every run verifies uncached URLs.
+pruned URL is uncached, so the next run verifies it.
 
 ## `max_cache_age`: the last-resort net
 
@@ -54,7 +58,9 @@ After lychee runs, results fold back into the owned file on positive evidence
 only:
 
 - A re-check that **changes** an entry's result replaces the entry: provenance
-  moves to `lychee`; comments and `expires` go with the old claim.
+  moves to `lychee`; comments and `expires` go with the old claim. A live
+  re-check of an entry whose `expires` has **lapsed** replaces it the same way,
+  even when the result is unchanged (the override is spent).
 - A **re-confirmation** leaves provenance-bearing entries (`manual`, named
   resolvers) untouched. A live re-check of a `lychee`-owned entry refreshes its
   `when` to record recency; a cache hit is not a re-check and leaves `when`
@@ -74,8 +80,7 @@ Prefer URL-scoped mechanisms (`exclude` patterns, or manual seeds in the owned
 cache) for URL-specific problems, and reserve lychee's `accept` list for
 statuses that are acceptable **site-wide**: an accepted status is recorded in
 the committed cache for every URL that returns it. Note that `accept` buys no
-caching: only 2xx results serve as cache hits, so an accepted non-2xx URL is
-re-checked on every run.
+caching: an accepted non-2xx URL is re-checked on every run.
 
 Forwarded lychee flags apply for one run: for example, `--max-cache-age 0s`
 makes lychee discard the whole cache file by age, so even `expires` entries
