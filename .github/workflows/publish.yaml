@@ -1,7 +1,8 @@
 name: publish
 
-# Auth: npm trusted publishing (OIDC) — requires one-time setup on npmjs.com
-# (package Settings > Trusted Publisher: this repo + this workflow).
+# Auth: npm trusted publishing (OIDC), set up once on npmjs.com (package
+# Settings > Trusted Publisher: this repo + this workflow). Why the job is
+# shaped as it is: _docs/supply-chain.md.
 
 on:
   release:
@@ -25,7 +26,5 @@ jobs:
         run: |
           version=$(node -p 'require("./package.json").version')
           test "$GITHUB_REF_NAME" = "v$version"
-      # No install or checks: `check` already gates every push, and publishing
-      # needs no node_modules — so no registry-delivered code runs with
-      # id-token authority.
+      # No install or checks (rationale: _docs/supply-chain.md).
       - run: npm publish --ignore-scripts

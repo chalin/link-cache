@@ -3,15 +3,18 @@ title: Release runbook
 ---
 
 How a `link-cache` version reaches npm, and what follows in the consuming sites.
-The only publish trigger is a GitHub release; why the workflow is shaped as it
-is: [Supply-chain posture](supply-chain.md).
+The only publish trigger is a GitHub release. For why the workflow is shaped as
+it is, see [Supply-chain posture](supply-chain.md).
 
 ## Before tagging
 
-1. `main` is green and holds everything meant for the release; docs and code
-   land before the tag, not after.
+1. `main` holds everything meant for the release (docs and code land before the
+   tag, not after), and its head's `check` run is green. This is the gate: no
+   repo rule enforces a check on the commit the publish workflow releases.
 2. `package.json` `version` is the release version (the publish workflow refuses
-   a tag that doesn't match it). Bump it in its own commit if needed.
+   a tag that doesn't match it). If a bump is needed, land it in its own commit
+   with `npm version X.Y.Z --no-git-tag-version`, which moves the lockfile's
+   copy too.
 3. Locally, from a clean checkout of `main`:
 
    ```sh
@@ -25,7 +28,7 @@ is: [Supply-chain posture](supply-chain.md).
    always includes). No tests, docs, or maintainer pages.
 
 4. Review the diff since the previous tag for behavior changes consumers must
-   act on; they become the release notes.
+   act on: they become the release notes.
 
 ## Tag and release
 
@@ -46,35 +49,38 @@ version, and release again; never move or delete a published tag.
 ## Consumer bumps
 
 Consumers pin the package (the larger sites exactly), so each release is
-followed by bump PRs. Current consumers and what a bump touches:
+followed by bump PRs. Their `.npmrc` cooldown (`min-release-age=7`) rejects a
+version younger than a week, so open the bumps a week after publishing, or wait
+out the cooldown in the bump branch. Current consumers and what a bump touches:
 
 - **[google/docsy][]** (docsy.dev): `package.json` pin, the PR check workflow,
   and the scheduled refresh workflow; the repo's maintainer notes describe the
   cache semantics.
 - **[google/docsy-example][]**: `package.json` pin and its check scripts; no
   refresh lane.
-- **[chalin/docsy-starter][]**: `package.json` pin; the reference wiring other
-  sites copy, so its `lychee.toml` comments must match the released semantics.
+- **[chalin/docsy-starter][]**: `package.json` pin. It is the reference wiring
+  other sites copy, so its `lychee.toml` comments must match the released
+  semantics.
 - **[open-telemetry/opentelemetry.io][]**: `package.json` pin, the PR check
   workflow, the refresh workflow, and helper scripts under `scripts/lychee/`.
-  The largest cache; verify its double-check flow against any change to
+  The largest cache: verify its double-check flow against any change to
   failure-word recording.
 
 For each bump PR:
 
-1. Pin the new version; run the repo's safe install and its link-check script
-   once to let the tools rewrite the cache file (schema migrations land in this
-   run).
-2. Drop any flag the release removed; workflow runs fail loudly on unknown
+1. Pin the new version, then run the repo's safe install and its link-check
+   script once to let the tools rewrite the cache file (schema migrations land
+   in this run).
+2. Drop any flag the release removed: workflow runs fail loudly on unknown
    flags, so the CI result confirms the sweep.
 3. Update the repo's own docs wherever they describe cache semantics.
 4. Let the PR's link check run green before requesting review.
 
 ## After the release
 
-- Confirm each consumer's refresh lane is enabled and produced a PR at its next
-  scheduled run; a disabled refresh lane is the one failure the tools can't
-  signal until `max_cache_age` fires.
+- For each consumer with a refresh lane, confirm it is enabled and produced a PR
+  at its next scheduled run; a disabled refresh lane is the one failure the
+  tools can't signal until `max_cache_age` fires.
 - Close the release's tracking issues and milestone, if any.
 
 <!-- prettier-ignore-start -->

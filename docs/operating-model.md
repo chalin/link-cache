@@ -18,8 +18,9 @@ absent, `max_cache_age` governs.**
 - An entry **with** `expires` projects a fresh timestamp, so it is always
   served, **lapsed or not**: PR checks never stop serving a seed. While the
   `expires` holds (or forever, with `never`), the entry is also exempt from
-  age-ordered pruning. Only `link-cache --prune` acts on a lapse, by dropping
-  the entry.
+  age-ordered pruning. A lapse is normally retired by `link-cache --prune`,
+  which drops the entry; the one exception is a forced live re-check (see
+  [Merge-back](#merge-back)).
 - Only 2xx results project. Failure words and non-2xx results re-check on every
   run.
 
@@ -30,25 +31,25 @@ command with the same projection.
 
 - **PR lane** (CI on a pull request, or a maintainer's local run): run the
   checker unflagged. It checks URLs the cache doesn't vouch for (absent, or with
-  a non-2xx result) and entries older than `max_cache_age`; under a healthy
-  refresh lane there are none of the latter. So a PR run's outcome and its cache
-  diff depend only on what the PR changed.
+  a non-2xx result) and entries older than `max_cache_age` (under a healthy
+  refresh lane, none). So a PR run's outcome and its cache diff depend only on
+  what the PR changed.
 - **Refresh lane**: a scheduled workflow that prunes the N oldest entries
-  (`link-cache --prune N`; lapsed `expires` go too), runs the checker, and opens
-  a PR with the cache changes. Live URLs come back with fresh timestamps, dead
-  ones with failure words for triage. Size N so the cache rotates fully every
-  few weeks.
+  (`npm run link-cache -- --prune N`; lapsed `expires` go too), runs the
+  checker, and opens a PR with the cache changes. Live URLs come back with fresh
+  timestamps, dead ones with failure words for triage. Size N so the cache
+  rotates fully every few weeks.
 
-Freshness comes from the refresh lane's prune, not from `max_cache_age`: a
-pruned URL is uncached, so the next run verifies it.
+Freshness comes from that prune: a pruned URL is uncached, so the next run
+verifies it.
 
 ## `max_cache_age`: the last-resort net
 
-Set `max_cache_age` in `lychee.toml`; lychee's default is `1d`, which would
+Set `max_cache_age` in `lychee.toml`: lychee's default is `1d`, which would
 re-check most of the cache on every run. It is a safety net, not a refresh
 mechanism: set it far above one full rotation (a year is typical). Under a
 healthy refresh lane it never fires. When the refresh lane stops, entries
-eventually age past it and PR runs start re-checking them; the refreshed
+eventually age past it and PR runs start re-checking them: the refreshed
 timestamps then showing up in PR diffs are the alarm, and the remedy is the
 refresh lane, never the age.
 
@@ -60,7 +61,10 @@ only:
 - A re-check that **changes** an entry's result replaces the entry: provenance
   moves to `lychee`; comments and `expires` go with the old claim. A live
   re-check of an entry whose `expires` has **lapsed** replaces it the same way,
-  even when the result is unchanged (the override is spent).
+  even when the result is unchanged (the override is spent). Such a re-check
+  happens only when forced (`--max-cache-age 0s`), and a forced run that
+  completes within the same second as the projection reads as a cache hit
+  instead, leaving the entry for the next prune.
 - A **re-confirmation** leaves provenance-bearing entries (`manual`, named
   resolvers) untouched. A live re-check of a `lychee`-owned entry refreshes its
   `when` to record recency; a cache hit is not a re-check and leaves `when`

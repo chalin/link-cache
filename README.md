@@ -17,8 +17,8 @@ real changes (link statuses, and check recency for freshly re-verified entries).
 
 ## Install
 
-Requires [Node.js][] >= 24, the [lychee][] binary on your `PATH`, and a
-`lychee.toml` at your site root.
+Requires [Node.js][] >= 24; `lychee-norm-cache` also needs the [lychee][] binary
+on your `PATH` and a `lychee.toml` at your site root.
 
 ```sh
 npm install --save-dev link-cache
@@ -46,8 +46,8 @@ Wire the bins into your `package.json` scripts, using bare names (`npm run` puts
 Build your site, set `max_cache_age` in `lychee.toml` (a year is typical), then:
 
 ```sh
-npm run check:links              # check; creates or updates link-cache.jsonc
-npm run link-cache -- --summary  # cache stats (count, oldest, result, via, ages)
+npm run check:links              # creates or updates link-cache.jsonc
+npm run link-cache -- --summary  # cache stats
 ```
 
 Then:
@@ -55,17 +55,19 @@ Then:
 - Commit `link-cache.jsonc`; gitignore `.lycheecache`.
 - Run the check unflagged in PR checks.
 - Add a scheduled workflow that prunes the oldest entries
-  (`link-cache --prune N`), re-checks, and opens a PR with the changes.
+  (`npm run link-cache -- --prune N`), re-checks, and opens a PR with the
+  changes.
 
 ## Documentation
 
 User docs, in `docs/`:
 
-- [The owned cache: `link-cache.jsonc`](docs/cache-format.md): file format,
+- [The owned cache](docs/cache-format.md): the `link-cache.jsonc` format, its
   fields, hand-seeding entries, `expires`.
 - [Operating model](docs/operating-model.md): the projection rule, the PR and
   refresh lanes, `max_cache_age`, merge-back.
-- [CLI reference](docs/cli.md): options, exit codes, requirements.
+- [CLI reference](docs/cli.md): wiring, requirements, workflow-relevant
+  behavior.
 - [Migrating to lychee and link-cache](docs/migrate.md): from htmltest, and from
   a committed `.lycheecache`.
 

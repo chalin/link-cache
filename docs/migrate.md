@@ -11,7 +11,7 @@ the owned `link-cache.jsonc`. A site starting fresh with lychee skips both: the
 
 ### Inventory the incumbent
 
-Catalog what htmltest carries; every item needs a lychee disposition: ported,
+Catalog what htmltest carries. Every item needs a lychee disposition: ported,
 replaced, or dropped.
 
 - Config: `.htmltest.yml` (`IgnoreDirs`, `IgnoreURLs`, `IgnoreInternalURLs`).
@@ -28,10 +28,10 @@ Build, then run lychee offline over `public/` and drive the error count to
 htmltest parity before touching anything online:
 
 - Start from a `lychee.toml`, not bare flags. Fragment checks need both
-  `include_fragments` and `index_files = ["index.html"]`; without the latter,
+  `include_fragments` and `index_files = ["index.html"]`: without the latter,
   pretty URLs (`/foo/`) fail fragment checks en masse.
 - Port `IgnoreDirs` to `exclude_path` and `IgnoreURLs` to `exclude` regexes.
-- Set `extensions = ["html"]`; without it, RSS and sitemap XML built with a
+- Set `extensions = ["html"]`: without it, RSS and sitemap XML built with a
   localhost `baseURL` flood the run with bogus errors.
 - Lychee has no element-level ignore marker. Convert each tagged element to a
   URL `exclude` (for example, per-page GitHub `commit/` links) or to
@@ -42,7 +42,7 @@ htmltest parity before touching anything online:
 
 ### Seed the cache online
 
-- Lychee reads only `GITHUB_TOKEN` or `--github-token`; `gh auth login` alone
+- Lychee reads only `GITHUB_TOKEN` or `--github-token`: `gh auth login` alone
   does nothing. `lychee-norm-cache` bridges the `gh` token for local runs; in
   CI, set `GITHUB_TOKEN` on the check step. Without a token, a green check may
   be green only because the cache covers every github.com URL.
@@ -57,7 +57,9 @@ htmltest parity before touching anything online:
 - Seed choice scales with the cache: a small cache seeds fresh (translation
   would carry the stale entries the switch is meant to flush); a cache of
   thousands translates the old refcache for trust parity and lets the refresh
-  lane flush rot over time.
+  lane flush rot over time. The tools import only lychee's CSV, so translation
+  is a one-off script from `refcache.json` to `.lycheecache`, followed by a
+  check run and then `--import`.
 - Commit the post-run cache, not a raw translation: lychee canonicalizes
   bare-origin URLs (`https://x.com` becomes `https://x.com/`), so only a cache
   that has been through a full run is byte-stable.
@@ -79,9 +81,10 @@ htmltest parity before touching anything online:
 ### CI
 
 - Install a pinned lychee binary via `curl` rather than `lychee-action` (no
-  install-only mode; a second trust surface). With several consuming workflows,
-  put the install step in a shared composite action so the version pin has one
-  home. Install to a directory already on the runner's default `PATH`.
+  install-only mode, and a second trust surface). With several consuming
+  workflows, put the install step in a shared composite action so the version
+  pin has one home. Install to a directory already on the runner's default
+  `PATH`.
 - Make the PR check blocking, and give deploys a non-blocking variant (soften
   exit 1, fail on exit 2) so a cold-cache throttle can't block a deploy.
 - Add offline sanity tests (fragment and index-file behavior, binary presence)
@@ -103,7 +106,7 @@ htmltest parity before touching anything online:
 - Prove the signal before merging, as temporary commits reverted before review:
   a real-domain 404 must turn the check red (lychee skips reserved TLDs such as
   `.invalid`), and a valid but uncached link must produce a cache diff. Confirm
-  the reported link count is plausible; a silent no-op looks exactly like
+  the reported link count is plausible: a silent no-op looks exactly like
   success.
 - Links to files the PR itself adds 404 until merge: name such paths as code, or
   seed the entry deliberately.
