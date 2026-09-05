@@ -49,7 +49,7 @@ npm versions ignore it silently):
 
 - Actions in [`publish.yaml`][], the workflow with publish authority, are pinned
   to full commit SHAs, with the version in a trailing comment for readability (a
-  tag can be moved; a SHA cannot). The check workflow still uses tag pins.
+  tag can be moved; a SHA cannot). [`check.yaml`][] still uses tag pins.
 - The publish job installs nothing and runs `npm publish --ignore-scripts`. The
   check workflow runs on every pull request and on pushes to `main`, but nothing
   enforces it on the release commit: the [release runbook](release.md) makes a
@@ -81,6 +81,7 @@ so the check itself runs read-only.
 
 <!-- prettier-ignore-start -->
 [`.npmrc`]: ../.npmrc
+[`check.yaml`]: ../.github/workflows/check.yaml
 [`publish.yaml`]: ../.github/workflows/publish.yaml
 [otel-supply-chain]: https://opentelemetry.io/site/design/supply-chain-security/
 <!-- prettier-ignore-end -->

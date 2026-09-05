@@ -9,8 +9,9 @@ it is, see [Supply-chain posture](supply-chain.md).
 ## Before tagging
 
 1. `main` holds everything meant for the release (docs and code land before the
-   tag, not after), and its head's `check` run is green. This is the gate: no
-   repo rule enforces a check on the commit the publish workflow releases.
+   tag, not after), and its head's [`check.yaml`][] run is green. This is the
+   gate: no repo rule enforces a check on the commit the publish workflow
+   releases.
 2. `package.json` `version` is the release version (the publish workflow refuses
    a tag that doesn't match it). If a bump is needed, land it in its own commit
    with `npm version X.Y.Z --no-git-tag-version`, which moves the lockfile's
@@ -84,6 +85,7 @@ For each bump PR:
 - Close the release's tracking issues and milestone, if any.
 
 <!-- prettier-ignore-start -->
+[`check.yaml`]: ../.github/workflows/check.yaml
 [`publish.yaml`]: ../.github/workflows/publish.yaml
 [chalin/docsy-starter]: https://github.com/chalin/docsy-starter
 [google/docsy-example]: https://github.com/google/docsy-example

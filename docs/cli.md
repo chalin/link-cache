@@ -5,8 +5,7 @@ title: CLI reference
 The package installs two bins (plus a deprecated alias). Each bin's options,
 their order semantics, and its exit codes live in its `--help` text, whose
 source is the usage block at the top of the bin's entry file
-([`check/index.mjs`](../check/index.mjs),
-[`link-cache/index.mjs`](../link-cache/index.mjs)); this page covers what
+([`check/index.mjs`][], [`link-cache/index.mjs`][]); this page covers what
 `--help` doesn't: wiring, requirements, and the behavior that matters to a
 site's workflows.
 
@@ -44,10 +43,10 @@ lists the options; for example `--offline`, or `--max-cache-age` to override
 and `--cache=false` is rejected with an owned cache, since a cacheless run would
 erase every projected entry on merge-back.
 
-For CI wrappers: a warn-style wrapper can soften the dead-links exit (advisory
-link rot) but must still fail hard on the preflight exit, which means the check
-didn't actually run (an empty or fully-excluded `public/` is a false-clean, not
-a pass).
+For CI wrappers: a warn-style wrapper can soften the dead-links exit (1,
+advisory link rot) but must still fail hard on the preflight exit (2), which
+means the check didn't actually run (an empty or fully-excluded `public/` is a
+false-clean, not a pass).
 
 ## `link-cache`
 
@@ -84,6 +83,8 @@ npm run link-cache -- --prune 0  # lapsed entries only
 ```
 
 <!-- prettier-ignore-start -->
+[`check/index.mjs`]: https://github.com/chalin/link-cache/blob/main/check/index.mjs
+[`link-cache/index.mjs`]: https://github.com/chalin/link-cache/blob/main/link-cache/index.mjs
 [lychee]: https://github.com/lycheeverse/lychee
 [gh]: https://cli.github.com/
 <!-- prettier-ignore-end -->
