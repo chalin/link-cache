@@ -50,9 +50,11 @@ version, and release again; never move or delete a published tag.
 ## Consumer bumps
 
 Consumers pin the package (the larger sites exactly), so each release is
-followed by bump PRs. Their `.npmrc` cooldown (`min-release-age=7`) rejects a
-version younger than a week, so open the bumps a week after publishing, or wait
-out the cooldown in the bump branch. Current consumers and what a bump touches:
+followed by bump PRs. Where the consumer's `.npmrc` sets a cooldown
+(`min-release-age=7`: docsy, docsy-starter, opentelemetry.io), a version younger
+than a week is rejected, so open those bumps a week after publishing, or wait
+out the cooldown in the bump branch; docsy-example has no cooldown. Current
+consumers and what a bump touches:
 
 - **[google/docsy][]** (docsy.dev): `package.json` pin, the PR check workflow,
   and the scheduled refresh workflow; the repo's maintainer notes describe the

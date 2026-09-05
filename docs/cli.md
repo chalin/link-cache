@@ -4,10 +4,9 @@ title: CLI reference
 
 The package installs two bins (plus a deprecated alias). Each bin's options,
 their order semantics, and its exit codes live in its `--help` text, whose
-source is the usage block at the top of the bin's entry file
-([`check/index.mjs`][], [`link-cache/index.mjs`][]); this page covers what
-`--help` doesn't: wiring, requirements, and the behavior that matters to a
-site's workflows.
+source is the `USAGE` constant in the bin's entry file ([`check/index.mjs`][],
+[`link-cache/index.mjs`][]); this page covers what `--help` doesn't: wiring,
+requirements, and the behavior that matters to a site's workflows.
 
 Wire the bins into `package.json` scripts under bare names and run them through
 `npm run`, which puts `node_modules/.bin` on the `PATH`.
@@ -83,8 +82,8 @@ npm run link-cache -- --prune 0  # lapsed entries only
 ```
 
 <!-- prettier-ignore-start -->
-[`check/index.mjs`]: https://github.com/chalin/link-cache/blob/main/check/index.mjs
-[`link-cache/index.mjs`]: https://github.com/chalin/link-cache/blob/main/link-cache/index.mjs
+[`check/index.mjs`]: ../check/index.mjs
+[`link-cache/index.mjs`]: ../link-cache/index.mjs
 [lychee]: https://github.com/lycheeverse/lychee
 [gh]: https://cli.github.com/
 <!-- prettier-ignore-end -->

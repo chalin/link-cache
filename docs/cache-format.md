@@ -49,9 +49,9 @@ re-check.
 
 - **`result`** (required): an HTTP status int (`200`, `206`, …), or a failure
   word from lychee's own tag vocabulary (`"error"`, `"timeout"`). Seed 2xx
-  results only (the only kind lychee serves; for what each result does at run
-  time, see [Operating model](operating-model.md#one-rule)); for an expected
-  non-2xx status, use lychee's `exclude` or `accept` instead.
+  results only (for what each result does at run time, see
+  [Operating model](operating-model.md#one-rule)); for an expected non-2xx
+  status, use lychee's `exclude` or `accept` instead.
 - **`when`**: the moment the result was established, as RFC3339 UTC at whole
   seconds (`YYYY-MM-DDTHH:MM:SSZ`), converting exactly to and from lychee's
   epoch-seconds cache timestamps. The form is strict (no fractional seconds, no
