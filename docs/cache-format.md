@@ -33,8 +33,9 @@ run time, see [Operating model](operating-model.md).
 
 The empty cache is `{}` (a zero-byte file is rejected). The multi-line shape is
 deliberate: field-per-line entries keep concurrent updates merging cleanly under
-git's normal 3-way merge. On a conflict, keep both sides' entries (the file is
-keyed by URL, so nothing else competes) and rerun the check: the next run
+git's normal 3-way merge. On a conflict, keep both hunks when they add different
+URLs; when both sides changed the same entry, keep one side whole (two copies of
+a field would parse last-wins, unnoticed). Then rerun the check: the next run
 re-normalizes the file. Don't add a `merge=union` gitattribute: on a multi-line
 file it can interleave entries into invalid JSON.
 
@@ -86,9 +87,8 @@ Re-seed from the refresh PR if the rationale still matters.
   read compatibly and rewritten to `result` by the first check or prune that
   writes the file.
 - 0.4.1 and 0.5.0 exempted every `manual` entry from pruning. Since 0.6.0, a
-  `manual` entry **without** `expires` ages and rotates like any other entry;
-  permanent trust is written `"expires": "never"`, never implied by a missing
-  field.
+  `manual` entry **without** `expires` ages and rotates like any other entry
+  (permanent trust is `"expires": "never"`).
 - 0.5.0 held an `expires` date through the end of its UTC day; since 0.6.0 the
   date lapses at the day's start, so an existing dated seed is re-verified one
   refresh earlier at most.

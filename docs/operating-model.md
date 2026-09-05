@@ -16,13 +16,12 @@ absent, `max_cache_age` governs.**
 - An entry **without** `expires` projects its real `when`, so lychee's
   `max_cache_age` decides whether it is served or re-checked.
 - A 2xx entry **with** `expires` projects a fresh timestamp, so it is always
-  served, **lapsed or not**: PR checks never stop serving a seed. While the
-  `expires` holds (or forever, with `never`), the entry is also exempt from
-  age-ordered pruning. A lapse is normally retired by the next prune, which
-  drops the entry; the check that follows re-adds a live URL as a plain `lychee`
-  entry (or records a failure word), so the override is one-shot and the entry's
-  comments go with it. The one exception is a forced live re-check (see
-  [Merge-back](#merge-back)).
+  served, **lapsed or not**. While the `expires` holds (or forever, with
+  `never`), the entry is also exempt from age-ordered pruning. A lapse is
+  normally retired by the next prune, which drops the entry; the check that
+  follows re-adds a live URL as a plain `lychee` entry (or records a failure
+  word), so the override is one-shot and the entry's comments go with it. The
+  one exception is a forced live re-check (see [Merge-back](#merge-back)).
 - Only 2xx results project. Failure words and non-2xx results re-check on every
   run.
 
@@ -32,17 +31,21 @@ command with the same projection.
 ## Two lanes
 
 - **PR lane** (CI on a pull request, or a maintainer's local run): run the
-  checker unflagged. It checks URLs the cache doesn't vouch for (absent, or with
-  a non-2xx result) and entries older than `max_cache_age` (none, under a
-  healthy refresh lane: [below](#max_cache_age-the-last-resort-net)). So a PR
-  run's outcome depends only on URLs the cache doesn't vouch for, and so does
-  its cache diff, apart from one-time normalization of hand edits (resolved
-  `+Nd` sugar, a dated `when`-less seed) or of a legacy file.
+  checker unflagged. It checks only URLs the cache doesn't vouch for (absent, or
+  with a non-2xx result) and entries older than `max_cache_age` (none, under a
+  healthy refresh lane: [below](#max_cache_age-the-last-resort-net)); its cache
+  diff is confined to those too, apart from one-time normalization of hand edits
+  (resolved `+Nd` sugar, a dated `when`-less seed) or of a legacy file.
 - **Refresh lane**: a scheduled workflow that prunes the _`COUNT`_ oldest
   entries (`npm run link-cache -- --prune` _`COUNT`_; lapsed `expires` go too),
   runs the checker, and opens a PR with the cache changes. Live URLs come back
   with fresh timestamps, dead ones with failure words for triage. Size _`COUNT`_
   so the cache rotates fully every few weeks.
+
+In CI, give the check step only the `GITHUB_TOKEN` it needs and install with
+`npm ci --ignore-scripts`; the refresh lane's PR-opening step needs `contents`
+and `pull-requests` write permission, so keep it in a separate job and let the
+check itself run read-only.
 
 ## `max_cache_age`: the last-resort net
 
@@ -64,9 +67,10 @@ only:
   claim (a failure instead follows the failing rule below). A live re-check of
   an entry whose `expires` has **lapsed** replaces it the same way, even when
   the result is unchanged (the override is spent). Such a re-check happens only
-  when forced (`--max-cache-age 0s`), and a forced run that completes within the
-  same second as the projection reads as a cache hit instead, leaving the entry
-  for the next prune.
+  when forced: `--max-cache-age 0s`, passed through for one run, makes lychee
+  discard the whole cache by age. A forced run that completes within the same
+  second as the projection reads as a cache hit instead, leaving the entry for
+  the next prune.
 - A **re-confirmation** leaves provenance-bearing entries (`manual`, named
   resolvers) untouched. A live re-check of a `lychee`-owned entry refreshes its
   `when` to record recency; a cache hit is not a re-check and leaves `when`
@@ -80,14 +84,24 @@ only:
 
 For the full contract, see `mergeBack` in `lib/cache.mjs`.
 
-## `lychee.toml` guidance
+## `lychee.toml` starter
+
+A site root needs a `lychee.toml`; this one covers a built `public/` tree:
+
+```toml
+cache = true
+max_cache_age = "365d"        # the last-resort net, far above one rotation
+no_progress = true
+extensions = ["html"]         # skip RSS and sitemap XML
+include_fragments = "full"    # check anchors too
+index_files = ["index.html"]  # resolve pretty URLs for fragment checks
+exclude = [
+  '[?&]link-check=no',        # per-link opt-out
+]
+```
 
 Prefer URL-scoped mechanisms (`exclude` patterns, or manual seeds in the owned
 cache) for URL-specific problems, and reserve lychee's `accept` list for
 statuses that are acceptable **site-wide**: an accepted status is recorded in
-the committed cache for every URL that returns it. `accept` buys no caching: an
-accepted non-2xx URL is re-checked on every run.
-
-Forwarded lychee flags apply for one run: for example, `--max-cache-age 0s`
-makes lychee discard the whole cache file by age, so even `expires` entries
-re-check (with the same-second caveat under [Merge-back](#merge-back)).
+the committed cache for every URL that returns it. `accept` buys no caching
+(non-2xx results re-check every run, per the [rule above](#one-rule)).

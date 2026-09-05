@@ -32,9 +32,8 @@ npm install --save-dev github:chalin/link-cache#semver:^0.6.0
 
 ## Quickstart
 
-Wire the bins into your `package.json` scripts, using bare names (`npm run` puts
-`node_modules/.bin` on the `PATH`; never `npx`, for the reason the
-[CLI reference](docs/cli.md) gives):
+Wire the bins into your `package.json` scripts, using bare names (never `npx`:
+[CLI reference](docs/cli.md)):
 
 ```json
 "scripts": {
@@ -43,38 +42,37 @@ Wire the bins into your `package.json` scripts, using bare names (`npm run` puts
 }
 ```
 
-Create the owned cache as an empty object, build your site, set `max_cache_age`
-in `lychee.toml` (a year is typical), then check:
+Create `link-cache.jsonc` containing `{}` (UTF-8; without the file the check
+stays in legacy CSV mode), add a `lychee.toml` from the
+[starter](docs/operating-model.md#lycheetoml-starter), build your site, then
+check:
 
 ```sh
-echo '{}' > link-cache.jsonc     # once; else the check stays in legacy CSV mode
 npm run check:links              # fills link-cache.jsonc
 npm run link-cache -- --summary  # cache stats
 ```
 
 - Commit `link-cache.jsonc`; gitignore `.lycheecache`.
 - Run the check unflagged in PR checks.
-- Add a scheduled workflow that prunes the oldest entries
-  (`npm run link-cache -- --prune` _`COUNT`_, sized so the cache rotates every
-  few weeks), re-checks, and opens a PR with the changes.
+- Add the refresh lane, a scheduled prune-and-recheck that opens a PR
+  ([Operating model](docs/operating-model.md#two-lanes)).
 
 ## Documentation
 
 User docs, in `docs/`:
 
 - [The owned cache](docs/cache-format.md): the `link-cache.jsonc` format, its
-  fields, hand-seeding entries, `expires`.
+  fields, hand-seeding entries, `expires`
 - [Operating model](docs/operating-model.md): the projection rule, the PR and
-  refresh lanes, `max_cache_age`, merge-back.
-- [CLI reference](docs/cli.md): wiring, requirements, workflow-relevant
-  behavior.
+  refresh lanes, `max_cache_age`, merge-back, a `lychee.toml` starter
+- [CLI reference](docs/cli.md): wiring, requirements, workflow-relevant behavior
 - [Migrating to lychee and link-cache](docs/migrate.md): from htmltest, and from
-  a committed `.lycheecache`.
+  a committed `.lycheecache`
 
 Maintainer docs, in `_docs/`:
 
-- [Release runbook](_docs/release.md)
-- [Supply-chain posture](_docs/supply-chain.md)
+- [Release runbook](_docs/release.md): tagging, publishing, consumer bumps
+- [Supply-chain posture](_docs/supply-chain.md): the controls and why
 
 ## Development
 

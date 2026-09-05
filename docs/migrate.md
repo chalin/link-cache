@@ -5,7 +5,9 @@ title: Migrating to lychee and link-cache
 Two migrations, in the order sites typically meet them: from [htmltest][] (with
 a committed `refcache.json`) to lychee, and from a committed `.lycheecache` to
 the owned `link-cache.jsonc`. A site starting fresh with lychee skips both: the
-[README quickstart](../README.md#quickstart) and [CI](#ci) below cover it.
+[README quickstart](../README.md#quickstart), the
+[`lychee.toml` starter](operating-model.md#lycheetoml-starter), and [CI](#ci)
+below cover it.
 
 ## From htmltest to lychee
 
@@ -44,9 +46,9 @@ htmltest parity before touching anything online:
 
 - Lychee reads a token from `GITHUB_TOKEN`, `--github-token`, or `github_token`
   in `lychee.toml`: `gh auth login` alone does nothing. `lychee-norm-cache`
-  bridges the `gh` token for local runs; in CI, set `GITHUB_TOKEN` on the check
-  step. Without a token, a green check may be green only because the cache
-  covers every github.com URL.
+  bridges the `gh` token for local runs ([CLI reference](cli.md)); in CI, set
+  `GITHUB_TOKEN` on the check step. Without a token, a green check may be green
+  only because the cache covers every github.com URL.
 - If github.com still throttles, look for per-page query-string variants (for
   example, `issues/new?title=PAGE` footer links) and exclude the pattern rather
   than seeding hundreds of variants.
@@ -61,9 +63,9 @@ htmltest parity before touching anything online:
   lane flush rot over time. The tools import only lychee's CSV, so translation
   is a one-off script from `refcache.json` to `.lycheecache`, followed by a
   check run and then `--import`.
-- Commit the post-run cache, not a raw translation: lychee canonicalizes
-  bare-origin URLs (`https://x.com` becomes `https://x.com/`), so only a cache
-  that has been through a full run is byte-stable.
+- Commit the post-run cache, not a raw translation: lychee canonicalizes URLs
+  ([Keys](cache-format.md#keys)), so only a cache that has been through a full
+  run is byte-stable.
 
 ### Wire the repo
 
@@ -71,10 +73,8 @@ htmltest parity before touching anything online:
   scripts under bare bin names, adapted to the repo's own npm-script conventions
   (see [CLI reference](cli.md)). Keep consumer-facing script names even when
   their meaning changes: workflows and contributor habits consume the name.
-- npm `--` forwarding carries one level per `--`: a script defined as
-  `npm run inner` swallows forwarded arguments unless its definition ends with a
-  trailing `--`. Verify with `npm run check:links -- --help`, which must print
-  the wrapper's usage (a swallowed flag runs the check instead).
+- Verify argument forwarding through the new scripts ([CLI reference](cli.md)):
+  `npm run check:links -- --help` must print the wrapper's usage.
 - Don't blanket-exclude on 403 or 429 as policy: bot walls aren't rot. Interim
   excludes are fine to ship; re-fetching 4xx URLs with browser-like headers is
   the follow-up.
@@ -87,7 +87,8 @@ htmltest parity before touching anything online:
   pin has one home. Install to a directory already on the runner's default
   `PATH`.
 - Make the PR check blocking, and give deploys a non-blocking variant (soften
-  exit 1, fail on exit 2) so a cold-cache throttle can't block a deploy.
+  exit 1, fail on exit 2: [CLI reference](cli.md)) so a cold-cache throttle
+  can't block a deploy.
 - Add offline sanity tests (fragment and index-file behavior, binary presence)
   so config regressions don't need a full build to surface.
 - Set up the refresh lane per [Operating model](operating-model.md) and decide

@@ -21,9 +21,9 @@ carries the burden of proof; prefer a few dozen lines of code over a package.
 
 `package-lock.json` is committed and is the only install path: `npm ci` (via
 `npm run install:safe`) installs exactly what the lock resolves and fails when
-the manifest's dependencies disagree with it, instead of resolving anew (it does
-not compare other fields, such as `version`). Never run bare `npm install` in
-this repo: it can rewrite the lock and pull newer versions.
+the manifest's dependencies disagree with it, instead of resolving anew. Never
+run bare `npm install` in this repo: it can rewrite the lock and pull newer
+versions.
 
 ## `.npmrc` controls
 
@@ -39,8 +39,8 @@ unknown key and skip it: `min-release-age` needs npm 11.10,
   says, so the control guards lock updates, not CI installs.
 - `ignore-scripts` and `strict-allow-scripts`: lifecycle scripts (`preinstall`,
   `postinstall`, ...) never run. No dependency here needs them. `install:safe`
-  repeats `--ignore-scripts` explicitly so the control survives an `.npmrc`
-  regression.
+  and the publish step repeat `--ignore-scripts` explicitly so the control
+  survives an `.npmrc` regression where it matters most.
 - `engine-strict`: the `engines` field is enforced, so an unsupported Node fails
   at install time rather than at first run.
 - `script-shell`: one interpreter for npm scripts on every platform (npm on
@@ -51,14 +51,12 @@ unknown key and skip it: `min-release-age` needs npm 11.10,
 - Actions in [`publish.yaml`][], the workflow with publish authority, are pinned
   to full commit SHAs, with the version in a trailing comment for readability (a
   tag can be moved; a SHA cannot). [`check.yaml`][] still uses tag pins.
-- The publish job installs nothing and runs `npm publish --ignore-scripts` (the
-  flag repeats the `.npmrc` control at the one step that runs with publish
-  authority, so it holds even if the file regresses). The check workflow runs on
+- The publish job installs nothing and runs `npm publish --ignore-scripts`: an
+  install under the job that holds the OIDC `id-token` would let
+  registry-delivered code run with publish authority. The check workflow runs on
   every pull request and on pushes to `main`, but nothing enforces it on the
   release commit: the [release runbook](release.md) makes a green `main` the
-  precondition for tagging. Re-running an install under the job that holds the
-  OIDC `id-token` would only let registry-delivered code run with publish
-  authority.
+  precondition for tagging.
 - Publishing is by npm trusted publishing (OIDC from this repo's workflow):
   there is no long-lived token to leak, and every version this workflow
   publishes (0.4.0 onward) carries provenance linking it to the workflow run.
@@ -76,11 +74,10 @@ described in the [CLI reference](../docs/cli.md). Consequences for this repo:
 
 ## Consumer-side controls
 
-Consumers should pin the package version (the larger sites pin exactly), install
-with `npm ci --ignore-scripts`, and give the link-check CI step only the
-`GITHUB_TOKEN` it needs. The refresh lane's PR-opening step runs with `contents`
-and `pull-requests` write permission: keep it in a separate job from the check
-so the check itself runs read-only.
+Consumers should pin the package version (the larger sites pin exactly); the
+CI-side controls (least-privilege token, script-free install, a separate job for
+the refresh lane's PR step) are in the user docs'
+[Operating model](../docs/operating-model.md#two-lanes).
 
 <!-- prettier-ignore-start -->
 [`.npmrc`]: ../.npmrc
