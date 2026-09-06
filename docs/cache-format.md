@@ -26,18 +26,19 @@ run time, see [Operating model](operating-model.md).
     "result": 200,
     "when": "2026-08-29T20:06:38Z",
     "via": "manual",
-    "expires": "2026-09-30",
+    "expires": "2026-10-01",
   },
 }
 ```
 
 The empty cache is `{}` (a zero-byte file is rejected). The multi-line shape is
 deliberate: field-per-line entries keep concurrent updates merging cleanly under
-git's normal 3-way merge. On a conflict, keep both hunks when they add different
-URLs; when both sides changed the same entry, keep one side whole (two copies of
-a field would parse last-wins, unnoticed). Then rerun the check: the next run
-re-normalizes the file. Don't add a `merge=union` gitattribute: on a multi-line
-file it can interleave entries into invalid JSON.
+git's normal 3-way merge. On a conflict involving distinct URLs, keep both
+entries. When both sides changed the same URL, choose one complete version of
+that entry. Duplicate URL keys are rejected, but repeated fields within an entry
+silently use the last value. Rerun the check to normalize the resolved file.
+Don't add a `merge=union` gitattribute: on a multi-line file it can interleave
+entries into invalid JSON.
 
 ## Keys
 
@@ -76,10 +77,9 @@ re-check.
 
 ## Comments
 
-Each `//` comment attaches to the entry below it and travels with it through
-[merge-back](operating-model.md#merge-back): it survives while the entry does
-and goes when the entry is replaced (a stale rationale is worse than none).
-Re-seed from the refresh PR if the rationale still matters.
+Each `//` comment attaches to the entry below it. For how updates preserve or
+remove comments, see [Merge-back](operating-model.md#merge-back). Re-seed from
+the refresh PR if the rationale still matters.
 
 ## Compatibility
 

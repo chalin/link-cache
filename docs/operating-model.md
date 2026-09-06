@@ -31,11 +31,14 @@ command with the same projection.
 ## Two lanes
 
 - **PR lane** (CI on a pull request, or a maintainer's local run): run the
-  checker unflagged. It checks only URLs the cache doesn't vouch for (absent, or
-  with a non-2xx result) and entries older than `max_cache_age` (none, under a
-  healthy refresh lane: [below](#max_cache_age-the-last-resort-net)); its cache
-  diff is confined to those too, apart from one-time normalization of hand edits
-  (resolved `+Nd` sugar, a dated `when`-less seed) or of a legacy file.
+  checker unflagged.
+  - It checks URLs the cache doesn't vouch for (absent, or with a non-2xx
+    result).
+  - It also re-checks entries older than `max_cache_age`. For the age backstop,
+    see [The last-resort net](#max_cache_age-the-last-resort-net).
+  - Its cache diff is confined to those checks, apart from one-time
+    normalization of hand edits (resolved `+Nd` sugar, a dated `when`-less seed)
+    or of a legacy file.
 - **Refresh lane**: a scheduled workflow that prunes the _`COUNT`_ oldest
   entries (`npm run link-cache -- --prune` _`COUNT`_; lapsed `expires` go too),
   runs the checker, and opens a PR with the cache changes. Live URLs come back

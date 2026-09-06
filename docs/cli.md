@@ -2,12 +2,9 @@
 title: CLI reference
 ---
 
-The package installs two bins (plus a deprecated alias). Each bin's options and
-exit codes (and, for `link-cache`, the order semantics) live in its `--help`
-text, whose source is the `USAGE` constant in the bin's entry file
-([`check/index.mjs`][], [`link-cache/index.mjs`][]). This page covers wiring and
-the behavior that matters to a site's workflows, and repeats the requirements
-for readers who haven't installed yet.
+For options and exit codes, run either bin with `--help`; `link-cache` also
+describes operation order there. The help text lives in the `USAGE` constants in
+[`check/index.mjs`][] and [`link-cache/index.mjs`][].
 
 Wire the bins into `package.json` scripts under bare names and run them through
 `npm run`, which puts `node_modules/.bin` on the `PATH`. Arguments after `--`

@@ -67,13 +67,12 @@ what a bump touches:
   maintainer notes that describe the cache semantics.
 - **[google/docsy-example][]**: exact pin, no cooldown; its check scripts; no
   refresh lane.
-- **[chalin/docsy-starter][]**: caret range (`^0.5.0`, which excludes 0.6.0, so
-  the manifest changes too), 7-day cooldown. The reference wiring other sites
-  copy, so its scripts and `lychee.toml` comments must match the released
-  semantics.
-- **[theupdateframework/theupdateframework.io][]**: caret range (`^0.3.0`), no
-  cooldown, and an `engines.node` of 22 against this package's `>=24`; a
-  contributor repo, so the bump goes in as an upstream PR.
+- **[chalin/docsy-starter][]**: caret range, 7-day cooldown. The reference
+  wiring other sites copy, so its scripts and `lychee.toml` comments must match
+  the released semantics.
+- **[theupdateframework/theupdateframework.io][]**: caret range, no cooldown.
+  Check its `engines.node` against this package's requirement before bumping.
+  The bump goes in as an upstream PR.
 - **[open-telemetry/opentelemetry.io][]**: exact pin, 7-day cooldown; the PR
   check workflow, the refresh workflow, and helper scripts under
   `scripts/lychee/`. The largest cache: verify its double-check flow against any
@@ -81,10 +80,10 @@ what a bump touches:
 
 For each bump PR:
 
-1. Bump the manifest and refresh the committed lockfile together (a
-   manifest-only change fails the consumers' `npm ci`), then run the safe
-   install and the link-check script once to let the tools rewrite the cache
-   file (schema migrations land in this run).
+1. Check that the dependency declaration admits the release: a caret range on a
+   0.x version excludes the next minor. Update the manifest when needed and
+   refresh the committed lockfile before running the safe install and link-check
+   script (schema migrations land in the check run).
 2. Drop any flag the release removed, in workflows and in `package.json`
    scripts: workflow runs fail loudly on unknown flags, local scripts don't.
 3. Update the repo's own docs wherever they describe cache semantics.

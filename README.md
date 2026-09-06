@@ -24,11 +24,11 @@ on your `PATH` and a `lychee.toml` at your site root.
 npm install --save-dev link-cache
 ```
 
-Or, to install from GitHub rather than the npm registry (npm 12 refuses git
-dependencies by default: add `--allow-git=root`):
+Or install from GitHub with an explicit opt-in for a direct git dependency
+(required by npm 12):
 
 ```sh
-npm install --save-dev github:chalin/link-cache#semver:^0.6.0
+npm install --save-dev --allow-git=root github:chalin/link-cache#semver:^0.6.0
 ```
 
 ## Quickstart

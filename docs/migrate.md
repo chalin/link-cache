@@ -29,14 +29,14 @@ replaced, or dropped.
 Build, then run lychee offline over `public/` and drive the error count to
 htmltest parity before touching anything online:
 
-- Start from a `lychee.toml`, not bare flags. Fragment checks need both
-  `include_fragments` and `index_files = ["index.html"]`: without the latter,
-  pretty URLs (`/foo/`) fail fragment checks en masse.
+- Start from the [`lychee.toml` starter][lychee-starter], not bare flags. Keep
+  its `include_fragments` value and `index_files` setting together so fragment
+  checks resolve pretty URLs (`/foo/`).
 - Port `IgnoreDirs` to `exclude_path`, and both `IgnoreURLs` and
   `IgnoreInternalURLs` to `exclude` regexes; write the internal ones unanchored,
   since lychee matches them against the resolved `file://` path under `public/`.
-- Set `extensions = ["html"]`: without it, RSS and sitemap XML built with a
-  localhost `baseURL` flood the run with bogus errors.
+- Use the starter's [HTML extension filter][lychee-starter]: RSS and sitemap XML
+  built with a localhost `baseURL` would otherwise produce bogus errors.
 - Lychee has no element-level ignore marker. Convert each tagged element to a
   URL `exclude` (for example, per-page GitHub `commit/` links) or to
   `rel="nofollow"`, which lychee skips natively.
@@ -140,4 +140,5 @@ cache-diff guards, and header comments that named `.lycheecache` now name
 
 <!-- prettier-ignore-start -->
 [htmltest]: https://github.com/wjdp/htmltest
+[lychee-starter]: operating-model.md#lycheetoml-starter
 <!-- prettier-ignore-end -->
