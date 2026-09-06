@@ -8,12 +8,12 @@ Zero-dependency helper CLIs for cached [Lychee][] link checking.
   [supply-chain posture][posture]
 
 <!-- prettier-ignore-start -->
-[cli]: https://github.com/chalin/link-cache/blob/main/docs/cli.md
-[development]: https://github.com/chalin/link-cache/blob/main/_docs/supply-chain.md#development
-[format]: https://github.com/chalin/link-cache/blob/main/docs/cache-format.md
+[cli]: docs/cli.md
+[development]: _docs/supply-chain.md#development
+[format]: docs/cache-format.md
 [Lychee]: https://github.com/lycheeverse/lychee
-[migration]: https://github.com/chalin/link-cache/blob/main/docs/migrate.md
-[model]: https://github.com/chalin/link-cache/blob/main/docs/operating-model.md
-[posture]: https://github.com/chalin/link-cache/blob/main/_docs/supply-chain.md
-[release]: https://github.com/chalin/link-cache/blob/main/_docs/release.md
+[migration]: docs/migrate.md
+[model]: docs/operating-model.md
+[posture]: _docs/supply-chain.md
+[release]: _docs/release.md
 <!-- prettier-ignore-end -->
