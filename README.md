@@ -24,7 +24,8 @@ on your `PATH` and a `lychee.toml` at your site root.
 npm install --save-dev link-cache
 ```
 
-Or, to install from GitHub rather than the npm registry:
+Or, to install from GitHub rather than the npm registry (npm 12 refuses git
+dependencies by default: add `--allow-git=root`):
 
 ```sh
 npm install --save-dev github:chalin/link-cache#semver:^0.6.0
@@ -49,7 +50,7 @@ check:
 
 ```sh
 npm run check:links              # fills link-cache.jsonc
-npm run link-cache -- --summary  # cache stats
+npm run link-cache -- --summary
 ```
 
 - Commit `link-cache.jsonc`; gitignore `.lycheecache`.

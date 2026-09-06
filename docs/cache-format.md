@@ -91,4 +91,4 @@ Re-seed from the refresh PR if the rationale still matters.
   (permanent trust is `"expires": "never"`).
 - 0.5.0 held an `expires` date through the end of its UTC day; since 0.6.0 the
   date lapses at the day's start, so an existing dated seed is re-verified one
-  refresh earlier at most.
+  day earlier at most.

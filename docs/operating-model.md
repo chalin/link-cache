@@ -92,11 +92,11 @@ A site root needs a `lychee.toml`; this one covers a built `public/` tree:
 cache = true
 max_cache_age = "365d"        # the last-resort net, far above one rotation
 no_progress = true
-extensions = ["html"]         # skip RSS and sitemap XML
+extensions = ["html", "htm"]  # skip RSS and sitemap XML
 include_fragments = "full"    # check anchors too
 index_files = ["index.html"]  # resolve pretty URLs for fragment checks
 exclude = [
-  '[?&]link-check=no',        # per-link opt-out
+  '[?&]link-check=no([&#]|$)', # per-link opt-out
 ]
 ```
 

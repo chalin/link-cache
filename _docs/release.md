@@ -45,7 +45,9 @@ repo and [`publish.yaml`][] as the publisher.
    `npm view link-cache version` prints it, and the README's doc links on the
    package page resolve (npm rewrites them to this repo).
 
-If the workflow fails, nothing has reached npm: re-run the failed job first. If
+If the workflow fails, first check whether the version reached npm anyway
+(`npm view link-cache@`_`VERSION`_ `version`: a publish can succeed before a
+lost response or a failing later step); if it did not, re-run the failed job. If
 the failure needs a code fix, leave the tag and release in place (a GitHub
 install may already have resolved the tag), fix on `main`, bump the patch
 version, release again, and point the orphaned release's notes at its successor.

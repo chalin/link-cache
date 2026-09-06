@@ -32,7 +32,9 @@ htmltest parity before touching anything online:
 - Start from a `lychee.toml`, not bare flags. Fragment checks need both
   `include_fragments` and `index_files = ["index.html"]`: without the latter,
   pretty URLs (`/foo/`) fail fragment checks en masse.
-- Port `IgnoreDirs` to `exclude_path` and `IgnoreURLs` to `exclude` regexes.
+- Port `IgnoreDirs` to `exclude_path`, and both `IgnoreURLs` and
+  `IgnoreInternalURLs` to `exclude` regexes; write the internal ones unanchored,
+  since lychee matches them against the resolved `file://` path under `public/`.
 - Set `extensions = ["html"]`: without it, RSS and sitemap XML built with a
   localhost `baseURL` flood the run with bogus errors.
 - Lychee has no element-level ignore marker. Convert each tagged element to a
