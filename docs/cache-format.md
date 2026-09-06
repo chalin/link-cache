@@ -33,12 +33,19 @@ run time, see [Operating model](operating-model.md).
 
 The empty cache is `{}` (a zero-byte file is rejected). The multi-line shape is
 deliberate: field-per-line entries keep concurrent updates merging cleanly under
-git's normal 3-way merge. On a conflict involving distinct URLs, keep both
-entries. When both sides changed the same URL, choose one complete version of
-that entry. Duplicate detection is line-oriented: compact duplicate URL keys can
-silently keep the last entry, and repeated fields use the last value. Rerun the
-check to normalize the resolved file. Don't add a `merge=union` gitattribute: on
-a multi-line file it can interleave entries into invalid JSON.
+git's normal 3-way merge.
+
+When resolving a conflict:
+
+- Keep both entries for distinct URLs.
+- Choose one complete version when both sides changed the same URL.
+- Keep one entry-opening line per URL. The duplicate check recognizes those
+  lines; duplicate entries sharing a physical line can silently keep the last
+  entry. Repeated fields within an entry also use the last value.
+- Rerun the check to normalize the resolved file.
+
+Don't add a `merge=union` gitattribute: on a multi-line file it can interleave
+entries into invalid JSON.
 
 ## Keys
 

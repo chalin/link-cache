@@ -31,33 +31,41 @@ repo and [`publish.yaml`][] as the publisher.
    always includes.
 
 4. Review the diff since the previous tag for behavior changes consumers must
-   act on: they become the release notes.
+   act on.
 
 ## Tag and release
 
-1. Tag the merge commit, _`MERGE_SHA`_: `git tag v`_`VERSION`_ _`MERGE_SHA`_,
-   then `git push origin v`_`VERSION`_.
+1. Tag the exact `main` commit verified in [Before tagging](#before-tagging),
+   _`RELEASE_SHA`_: `git tag v`_`VERSION`_ _`RELEASE_SHA`_, then
+   `git push origin v`_`VERSION`_.
 2. Create the GitHub release from the tag, with notes: a one-line summary,
    behavior changes and any migration steps, then the merged PRs. Publishing it
    is the only trigger of [`publish.yaml`][].
 3. Watch the [`publish.yaml`][] run: it refuses a tag that doesn't match
-   `package.json`, then publishes with no install step.
+   `package.json`, then publishes.
 4. Verify on npm: the version appears with a provenance badge,
    `npm view link-cache version` prints it, and the README's doc links on the
    package page resolve (npm rewrites them to this repo).
 
-If the workflow fails, first check whether the version reached npm anyway
-(`npm view link-cache@`_`VERSION`_ `version`: a publish can succeed before a
-lost response or a failing later step); if it did not, re-run the failed job. If
-the failure needs a code fix, leave the tag and release in place (a GitHub
-install may already have resolved the tag), fix on `main`, bump the patch
-version, release again, and point the orphaned release's notes at its successor.
+If the workflow fails:
+
+1. Check whether the version reached npm with `npm view link-cache@`_`VERSION`_
+   `version`. Publication can succeed before a lost response or a failing
+   post-job step.
+2. If the version is present, do not publish it again. Investigate the remaining
+   workflow failure.
+3. If the registry confirms the version is absent, re-run the failed job. A
+   network or authentication error is not proof that the version is absent.
+4. If recovery requires a code change, leave the tag and release in place (a
+   GitHub install may already have resolved the tag). Fix on `main`, bump the
+   patch version, release again, and point the earlier release's notes at its
+   successor.
+
 Never move or delete a tag.
 
 ## Consumer bumps
 
-Each release is followed by bump PRs in the consumers the maintainer tends
-(other sites depend on the package too and bump on their own schedule). A
+Each release is followed by bump PRs in the consumers the maintainer tends. A
 consumer whose `.npmrc` sets a `min-release-age` cooldown rejects a version
 younger than the cooldown ([Supply-chain posture](supply-chain.md)): open that
 bump after the cooldown, or wait it out in the bump branch. The consumers, with

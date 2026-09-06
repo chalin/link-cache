@@ -15,13 +15,15 @@ absent, `max_cache_age` governs.**
 
 - An entry **without** `expires` projects its real `when`, so lychee's
   `max_cache_age` decides whether it is served or re-checked.
-- A 2xx entry **with** `expires` projects a fresh timestamp, so it is always
-  served, **lapsed or not**. While the `expires` holds (or forever, with
-  `never`), the entry is also exempt from age-ordered pruning. A lapse is
-  normally retired by the next prune, which drops the entry; the check that
-  follows re-adds a live URL as a plain `lychee` entry (or records a failure
-  word), so the override is one-shot and the entry's comments go with it. The
-  one exception is a forced live re-check (see [Merge-back](#merge-back)).
+- A 2xx entry **with** `expires`:
+  - Projects a fresh timestamp, so it is served **lapsed or not**.
+  - Is exempt from age-ordered pruning while `expires` holds (or forever, with
+    `never`).
+  - Is normally retired by the next prune once lapsed. The following check
+    re-adds a live URL as a plain `lychee` entry or records a failure word. The
+    override is one-shot, and the old entry's comments go with it.
+  - Can be re-checked live when forced, as described under
+    [Merge-back](#merge-back).
 - Only 2xx results project. Failure words and non-2xx results re-check on every
   run.
 
@@ -40,10 +42,10 @@ command with the same projection.
     normalization of hand edits (resolved `+Nd` sugar, a dated `when`-less seed)
     or of a legacy file.
 - **Refresh lane**: a scheduled workflow that prunes the _`COUNT`_ oldest
-  entries (`npm run link-cache -- --prune` _`COUNT`_; lapsed `expires` go too),
-  runs the checker, and opens a PR with the cache changes. Live URLs come back
-  with fresh timestamps, dead ones with failure words for triage. Size _`COUNT`_
-  so the cache rotates fully every few weeks.
+  entries (`npm run link-cache -- --prune` _`COUNT`_), runs the checker, and
+  opens a PR with the cache changes. Live URLs come back with fresh timestamps,
+  dead ones with failure words for triage. Size _`COUNT`_ so the cache rotates
+  fully every few weeks.
 
 In CI, give the check step only the `GITHUB_TOKEN` it needs and install with
 `npm ci --ignore-scripts`; the refresh lane's PR-opening step needs `contents`
@@ -106,5 +108,5 @@ exclude = [
 Prefer URL-scoped mechanisms (`exclude` patterns, or manual seeds in the owned
 cache) for URL-specific problems, and reserve lychee's `accept` list for
 statuses that are acceptable **site-wide**: an accepted status is recorded in
-the committed cache for every URL that returns it. `accept` buys no caching
-(non-2xx results re-check every run, per the [rule above](#one-rule)).
+the committed cache for every URL that returns it. For which results can be
+cached, see the [projection rule](#one-rule).

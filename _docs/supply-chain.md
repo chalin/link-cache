@@ -77,7 +77,7 @@ unknown key and skip it: `min-release-age` needs npm 11.10,
 
 The `lychee-norm-cache` bin name was squatted on the npm registry in 2026,
 before the package reached it. The fallback that made the squat dangerous is
-described in the [CLI reference](../docs/cli.md). Consequences for this repo:
+described in the [CLI guide](../docs/cli.md). Consequences for this repo:
 
 - Never wire bare `npx` in scripts, CI, or docs; use bare bin names in `npm run`
   scripts.

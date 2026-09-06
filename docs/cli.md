@@ -1,5 +1,5 @@
 ---
-title: CLI reference
+title: Install and run
 ---
 
 For options and exit codes, run either bin with `--help`; `link-cache` also
@@ -17,9 +17,8 @@ npm install --save-dev link-cache
 
 ### Install from GitHub
 
-For GitHub installs, allow direct git dependencies in the project's `.npmrc`.
-npm 12 rejects them by default; a command-line opt-in alone would not carry over
-to a later `npm ci` run.
+For GitHub installs, allow direct git dependencies in the project's `.npmrc`
+(required by npm 12):
 
 ```sh
 npm config set --location=project allow-git=root
@@ -58,7 +57,7 @@ checks and scheduled refreshes, follow the [two-lane setup][lanes].
 Arguments after `--` reach the bin one script level deep: a script defined as
 `npm run inner` swallows them unless its definition ends with a trailing `--`.
 Verify with `npm run check:links -- --help`, which must print the wrapper's
-usage (a swallowed flag runs the check instead).
+usage, not npm's own `npm run` help.
 
 > [!WARNING]
 >
@@ -77,18 +76,22 @@ projecting the owned cache and folding lychee's results back per
 
 Requirements:
 
-- The [lychee][] binary on your `PATH`.
+- The [lychee][] binary on your `PATH`; the [starter][starter] requires version
+  0.24.0 or later.
 - A `lychee.toml` at your site root (lychee's config and ignore rules).
 - A built site under `public/` (run your site build first).
 - Optional: the [`gh`][gh] CLI, whose token is bridged to lychee to raise the
   github.com rate limit when `GITHUB_TOKEN` isn't already set.
 
-Anything the wrapper doesn't recognize passes through to lychee (`lychee --help`
-lists the options; for example `--offline`, or `--max-cache-age` to override
-`lychee.toml` for one run), except the stdout-diverting flags `--help` names as
-unsupported and two cache flags: `--cache` is added when absent, and
-`--cache=false` is rejected with an owned cache, since without lychee's cache
-file nothing is served from the owned cache and no results fold back.
+Extra arguments pass through to lychee, whose options are listed by
+`lychee --help`. For example, `--offline` runs an offline check, and
+`--max-cache-age` overrides `lychee.toml` for one run.
+
+- Flags that divert or reshape stdout are unsupported, as described in the
+  wrapper's `--help`.
+- The wrapper adds `--cache` when absent.
+- The wrapper rejects `--cache=false` with an owned cache. Without lychee's
+  cache file, nothing is served from the owned cache and no results fold back.
 
 For CI wrappers: a warn-style wrapper can soften the dead-links exit (1,
 advisory link rot) but must still fail hard on the preflight exit (2), which

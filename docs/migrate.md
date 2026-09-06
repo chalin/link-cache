@@ -48,7 +48,7 @@ htmltest parity before touching anything online:
 
 - Lychee reads a token from `GITHUB_TOKEN`, `--github-token`, or `github_token`
   in `lychee.toml`: `gh auth login` alone does nothing. `lychee-norm-cache`
-  bridges the `gh` token for local runs ([CLI reference](cli.md)); in CI, set
+  bridges the `gh` token for local runs ([CLI guide](cli.md)); in CI, set
   `GITHUB_TOKEN` on the check step. Without a token, a green check may be green
   only because the cache covers every github.com URL.
 - If github.com still throttles, look for per-page query-string variants (for
@@ -73,10 +73,10 @@ htmltest parity before touching anything online:
 
 - Add `link-cache` as a devDependency and wire check, refresh, and inspect
   scripts under bare bin names, adapted to the repo's own npm-script conventions
-  (see [CLI reference](cli.md)). Keep consumer-facing script names even when
-  their meaning changes: workflows and contributor habits consume the name.
+  (see [CLI guide](cli.md)). Keep consumer-facing script names even when their
+  meaning changes: workflows and contributor habits consume the name.
 - Verify argument forwarding through the new scripts
-  ([CLI reference](cli.md#argument-forwarding)): `npm run check:links -- --help`
+  ([CLI guide](cli.md#argument-forwarding)): `npm run check:links -- --help`
   must print the wrapper's usage.
 - Don't blanket-exclude on 403 or 429 as policy: bot walls aren't rot. Interim
   excludes are fine to ship; re-fetching 4xx URLs with browser-like headers is
@@ -90,8 +90,8 @@ htmltest parity before touching anything online:
   pin has one home. Install to a directory already on the runner's default
   `PATH`.
 - Make the PR check blocking, and give deploys a non-blocking variant (soften
-  exit 1, fail on exit 2: [CLI reference](cli.md)) so a cold-cache throttle
-  can't block a deploy.
+  exit 1, fail on exit 2: [CLI guide](cli.md)) so a cold-cache throttle can't
+  block a deploy.
 - Add offline sanity tests (fragment and index-file behavior, binary presence)
   so config regressions don't need a full build to surface.
 - Set up the refresh lane per [Operating model](operating-model.md) and decide
