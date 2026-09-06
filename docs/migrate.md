@@ -5,7 +5,7 @@ title: Migrating to lychee and link-cache
 Two migrations, in the order sites typically meet them: from [htmltest][] (with
 a committed `refcache.json`) to lychee, and from a committed `.lycheecache` to
 the owned `link-cache.jsonc`. A site starting fresh with lychee skips both: the
-[README quickstart](../README.md#quickstart), the
+[CLI quickstart](cli.md#quickstart), the
 [`lychee.toml` starter](operating-model.md#lycheetoml-starter), and [CI](#ci)
 below cover it.
 
@@ -75,8 +75,9 @@ htmltest parity before touching anything online:
   scripts under bare bin names, adapted to the repo's own npm-script conventions
   (see [CLI reference](cli.md)). Keep consumer-facing script names even when
   their meaning changes: workflows and contributor habits consume the name.
-- Verify argument forwarding through the new scripts ([CLI reference](cli.md)):
-  `npm run check:links -- --help` must print the wrapper's usage.
+- Verify argument forwarding through the new scripts
+  ([CLI reference](cli.md#argument-forwarding)): `npm run check:links -- --help`
+  must print the wrapper's usage.
 - Don't blanket-exclude on 403 or 429 as policy: bot walls aren't rot. Interim
   excludes are fine to ship; re-fetching 4xx URLs with browser-like headers is
   the follow-up.

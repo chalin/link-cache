@@ -11,6 +11,18 @@ deterministic and script-free. This page is the home of the rationale; the
 threat model behind the controls is the [OpenTelemetry website's supply-chain
 page][otel-supply-chain].
 
+## Development
+
+From the repository root:
+
+```sh
+npm run install:safe
+npm run check
+```
+
+Tests use Node's built-in test runner and need neither network access nor the
+Lychee binary.
+
 ## Zero runtime dependencies
 
 The published CLIs depend on Node's standard library only. Prettier is the sole

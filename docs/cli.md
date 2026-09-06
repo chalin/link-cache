@@ -6,12 +6,59 @@ For options and exit codes, run either bin with `--help`; `link-cache` also
 describes operation order there. The help text lives in the `USAGE` constants in
 [`check/index.mjs`][] and [`link-cache/index.mjs`][].
 
+## Install
+
+Requires [Node.js][] >= 24. For the checker's additional prerequisites, see
+[`lychee-norm-cache`](#lychee-norm-cache).
+
+```sh
+npm install --save-dev link-cache
+```
+
+### Install from GitHub
+
+For GitHub installs, allow direct git dependencies in the project's `.npmrc`.
+npm 12 rejects them by default; a command-line opt-in alone would not carry over
+to a later `npm ci` run.
+
+```sh
+npm config set --location=project allow-git=root
+npm install --save-dev github:chalin/link-cache#semver:^0.6.0
+```
+
+Commit the `.npmrc` change along with the dependency declaration and lockfile so
+local and CI installs use the same policy.
+
+## Quickstart
+
 Wire the bins into `package.json` scripts under bare names and run them through
-`npm run`, which puts `node_modules/.bin` on the `PATH`. Arguments after `--`
-reach the bin one script level deep: a script defined as `npm run inner`
-swallows them unless its definition ends with a trailing `--`. Verify with
-`npm run check:links -- --help`, which must print the wrapper's usage (a
-swallowed flag runs the check instead).
+`npm run`, which puts `node_modules/.bin` on the `PATH`:
+
+```json
+"scripts": {
+  "check:links": "lychee-norm-cache",
+  "link-cache": "link-cache"
+}
+```
+
+For a new cache, create `link-cache.jsonc` containing `{}` in UTF-8. For an
+existing CSV cache, use the [import procedure][import] instead. Add a
+`lychee.toml` from the [starter][starter], build the site, then run:
+
+```sh
+npm run check:links
+npm run link-cache -- --summary
+```
+
+Commit `link-cache.jsonc` and gitignore the derived `.lycheecache`. For PR
+checks and scheduled refreshes, follow the [two-lane setup][lanes].
+
+### Argument forwarding
+
+Arguments after `--` reach the bin one script level deep: a script defined as
+`npm run inner` swallows them unless its definition ends with a trailing `--`.
+Verify with `npm run check:links -- --help`, which must print the wrapper's
+usage (a swallowed flag runs the check instead).
 
 > [!WARNING]
 >
@@ -61,7 +108,7 @@ identically.
 
 ## Examples
 
-Beyond the [README quickstart](../README.md#quickstart)'s check and summary:
+With the scripts from the [quickstart](#quickstart):
 
 ```sh
 npm run link-cache -- --match "github\.com" --prune 10  # lapsed, then 10 oldest
@@ -71,6 +118,10 @@ npm run link-cache -- --prune 0  # lapsed entries only
 <!-- prettier-ignore-start -->
 [`check/index.mjs`]: ../check/index.mjs
 [gh]: https://cli.github.com/
+[import]: migrate.md#from-a-committed-lycheecache-to-the-owned-cache
+[lanes]: operating-model.md#two-lanes
 [`link-cache/index.mjs`]: ../link-cache/index.mjs
 [lychee]: https://github.com/lycheeverse/lychee
+[Node.js]: https://nodejs.org/
+[starter]: operating-model.md#lycheetoml-starter
 <!-- prettier-ignore-end -->

@@ -16,7 +16,8 @@ repo and [`publish.yaml`][] as the publisher.
 2. `package.json` `version` is the release version, _`VERSION`_ below. If a bump
    is needed, land it in its own commit with `npm version` _`VERSION`_
    `--no-git-tag-version`, which moves the lockfile's copy too, and update the
-   README's GitHub-install line (`#semver:^`_`VERSION`_) in the same commit.
+   [GitHub-install example](../docs/cli.md#install-from-github)
+   (`#semver:^`_`VERSION`_) in the same commit.
 3. Locally, from a clean checkout of `main`:
 
    ```sh
@@ -85,7 +86,8 @@ For each bump PR:
    refresh the committed lockfile before running the safe install and link-check
    script (schema migrations land in the check run).
 2. Drop any flag the release removed, in workflows and in `package.json`
-   scripts: workflow runs fail loudly on unknown flags, local scripts don't.
+   scripts. For verifying that arguments reach the checker, follow the
+   [argument-forwarding guidance](../docs/cli.md#argument-forwarding).
 3. Update the repo's own docs wherever they describe cache semantics.
 4. Let the PR's link check run green before requesting review.
 

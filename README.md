@@ -1,91 +1,19 @@
 # link-cache
 
-Zero-dependency helper CLIs for **cached** link checking with [Lychee][], for
-any static site that builds to a `public/` directory (Docsy, Hugo, and others).
-Two tools:
+Zero-dependency helper CLIs for cached [Lychee][] link checking.
 
-- **`lychee-norm-cache`**: run lychee over your built `public/` output, keeping
-  the committed `link-cache.jsonc` cache and lychee's derived `.lycheecache` in
-  sync.
-- **`link-cache`**: inspect and prune the cache. List the oldest entries, prune
-  a count or percentage (optionally scoped by URL regex), or print a summary
-  (result, provenance, ages). (`refcache` is a deprecated alias.)
-
-With a committed `lychee.toml` and `link-cache.jsonc`, these give a site a
-self-contained, cached link-checking setup: fast reruns, and diffs that reflect
-real changes (link statuses, and check recency for freshly re-verified entries).
-
-## Install
-
-Requires [Node.js][] >= 24; `lychee-norm-cache` also needs the [lychee][] binary
-on your `PATH` and a `lychee.toml` at your site root.
-
-```sh
-npm install --save-dev link-cache
-```
-
-Or install from GitHub with an explicit opt-in for a direct git dependency
-(required by npm 12):
-
-```sh
-npm install --save-dev --allow-git=root github:chalin/link-cache#semver:^0.6.0
-```
-
-## Quickstart
-
-Wire the bins into your `package.json` scripts, using bare names (never `npx`:
-[CLI reference](docs/cli.md)):
-
-```json
-"scripts": {
-  "check:links": "lychee-norm-cache",
-  "link-cache": "link-cache"
-}
-```
-
-Create `link-cache.jsonc` containing `{}` (UTF-8; without the file the check
-stays in legacy CSV mode), add a `lychee.toml` from the
-[starter](docs/operating-model.md#lycheetoml-starter), build your site, then
-check:
-
-```sh
-npm run check:links              # fills link-cache.jsonc
-npm run link-cache -- --summary
-```
-
-- Commit `link-cache.jsonc`; gitignore `.lycheecache`.
-- Run the check unflagged in PR checks.
-- Add the refresh lane, a scheduled prune-and-recheck that opens a PR
-  ([Operating model](docs/operating-model.md#two-lanes)).
-
-## Documentation
-
-User docs, in `docs/`:
-
-- [The owned cache](docs/cache-format.md): the `link-cache.jsonc` format, its
-  fields, hand-seeding entries, `expires`
-- [Operating model](docs/operating-model.md): the projection rule, the PR and
-  refresh lanes, `max_cache_age`, merge-back, a `lychee.toml` starter
-- [CLI reference](docs/cli.md): wiring, requirements, workflow-relevant behavior
-- [Migrating to lychee and link-cache](docs/migrate.md): from htmltest, and from
-  a committed `.lycheecache`
-
-Maintainer docs, in `_docs/`:
-
-- [Release runbook](_docs/release.md): tagging, publishing, consumer bumps
-- [Supply-chain posture](_docs/supply-chain.md): the controls and why
-
-## Development
-
-```sh
-npm run install:safe
-npm run check
-```
-
-Tests use Node's built-in test runner (`node --test`) and need no network or the
-lychee binary.
+- **User docs**: [Install and run][cli], [cache format][format], [operating
+  model][model], [migration][migration]
+- **Maintainer docs**: [Development][development], [releases][release],
+  [supply-chain posture][posture]
 
 <!-- prettier-ignore-start -->
+[cli]: docs/cli.md
+[development]: _docs/supply-chain.md#development
+[format]: docs/cache-format.md
 [Lychee]: https://github.com/lycheeverse/lychee
-[Node.js]: https://nodejs.org/
+[migration]: docs/migrate.md
+[model]: docs/operating-model.md
+[posture]: _docs/supply-chain.md
+[release]: _docs/release.md
 <!-- prettier-ignore-end -->
