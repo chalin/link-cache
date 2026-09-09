@@ -37,10 +37,14 @@ repo and [`publish.yaml`][] as the publisher.
 
 1. Tag the exact `main` commit verified in [Before tagging](#before-tagging),
    _`RELEASE_SHA`_: `git tag v`_`VERSION`_ _`RELEASE_SHA`_, then
-   `git push origin v`_`VERSION`_.
+   `git push origin v`_`VERSION`_. Push the tag before creating the release:
+   with immutable releases on, GitHub refuses to create a tag as part of a
+   release.
 2. Create the GitHub release from the tag, with notes: a one-line summary,
-   behavior changes and any migration steps, then the merged PRs. Publishing it
-   is the only trigger of [`publish.yaml`][].
+   behavior changes and any migration steps, then the merged PRs. Leave
+   _Pre-release_ unchecked: the workflow skips pre-releases, which would
+   otherwise reach npm's `latest`. Publishing the release is the only trigger of
+   [`publish.yaml`][].
 3. Watch the [`publish.yaml`][] run: it refuses a tag that doesn't match
    `package.json`, then publishes.
 4. Verify on npm: the version appears with a provenance badge,
@@ -61,7 +65,9 @@ If the workflow fails:
    patch version, release again, and point the earlier release's notes at its
    successor.
 
-Never move or delete a tag.
+Never move or delete a tag. A repository ruleset on `v*` tags rejects both, and
+immutable releases freeze a release's tag and assets once it is published: a
+`github:` install pinned to a tag keeps resolving to the code that was reviewed.
 
 ## Consumer bumps
 

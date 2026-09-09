@@ -60,9 +60,12 @@ unknown key and skip it: `min-release-age` needs npm 11.10,
 
 ## Pinned actions and a script-free publish
 
-- Actions in [`publish.yaml`][], the workflow with publish authority, are pinned
-  to full commit SHAs, with the version in a trailing comment for readability (a
-  tag can be moved; a SHA cannot). [`check.yaml`][] still uses tag pins.
+- Actions in [`check.yaml`][] and [`publish.yaml`][] are pinned to full commit
+  SHAs, with the version in a trailing comment for readability (a tag can be
+  moved; a SHA cannot).
+- The publish job skips a release marked as a pre-release: `npm publish` puts
+  every version it publishes on the default dist-tag, `latest`, which is what a
+  plain `npm install link-cache` resolves.
 - The publish job installs nothing and runs `npm publish --ignore-scripts`: an
   install under the job that holds the OIDC `id-token` would let
   registry-delivered code run with publish authority. The check workflow runs on
