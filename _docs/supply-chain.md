@@ -21,7 +21,21 @@ npm run check
 ```
 
 Tests use Node's built-in test runner and need neither network access nor the
-Lychee binary.
+Lychee binary. `.nvmrc` pins the Node version for `nvm use` and for both
+workflows, one home for the CI toolchain line.
+
+## Workflow lint
+
+`npm run check` includes `check:workflows`, a [zizmor][] pass over
+`.github/workflows` (unpinned actions, persisted credentials, cache poisoning,
+template injection, and the rest of its default audits). It runs locally before
+a push and again in CI, so a workflow edit cannot land unlinted. zizmor is not
+an npm package, so the script runs it through `uvx` at an exact version, the one
+committed exec of a non-npm tool in this repo: the pin is the control, and a
+bump is reviewed like a dependency and waits out the same seven-day cooldown as
+the `.npmrc` sets for npm. The check workflow installs `uv` (SHA-pinned action,
+pinned `uv` version, cache off) because the runner image lacks it; the publish
+job never runs the lint and never installs `uv`.
 
 ## Zero runtime dependencies
 
@@ -102,4 +116,5 @@ the refresh lane's PR step) are in the user docs'
 [`check.yaml`]: ../.github/workflows/check.yaml
 [otel-supply-chain]: https://opentelemetry.io/site/design/supply-chain-security/
 [`publish.yaml`]: ../.github/workflows/publish.yaml
+[zizmor]: https://docs.zizmor.sh/
 <!-- prettier-ignore-end -->
