@@ -21,7 +21,30 @@ npm run check
 ```
 
 Tests use Node's built-in test runner and need neither network access nor the
-Lychee binary.
+Lychee binary. `.nvmrc` pins the Node version for `nvm use` and for both
+workflows.
+
+## Workflow lint
+
+[`zizmor.yaml`][] runs [zizmor][] over `.github/workflows` in its pedantic
+persona (the security audits plus its workflow-hygiene ones) and uploads the
+results to the repository's Security tab.
+
+- Runs on every pull request, on pushes to `main`, and weekly, the weekly run
+  catching advisories published against already-pinned actions.
+- The step passes whatever it finds; what blocks a merge is the `main` ruleset,
+  which requires a zizmor and a CodeQL analysis and rejects a pull request whose
+  changed lines carry a security alert of high or higher severity or an
+  error-level alert (alerts elsewhere in the tree surface in the Security tab
+  but don't block).
+- The workflow calls the [OpenTelemetry shared workflow][otel-zizmor] at a
+  pinned commit; that workflow pins the zizmor action, which pins the zizmor
+  image by digest, so nothing in the chain moves until the pin here does.
+- CI-only by design: the repo carries no tooling dependency for it. A local run
+  when needed is `uvx zizmor@`_`VERSION`_` .github/workflows`, where _`VERSION`_
+  is the zizmor release the shared workflow currently pins.
+- The job's `security-events: write` grant sits alone in its workflow, away from
+  the jobs that install or publish.
 
 ## Zero runtime dependencies
 
@@ -58,20 +81,35 @@ unknown key and skip it: `min-release-age` needs npm 11.10,
 - `script-shell`: one interpreter for npm scripts on every platform (npm on
   Windows defaults to `cmd.exe`, whose quoting diverges silently).
 
-## Pinned actions and a script-free publish
+## Pinned actions, protected refs, and a script-free publish
 
-- Actions in [`publish.yaml`][], the workflow with publish authority, are pinned
-  to full commit SHAs, with the version in a trailing comment for readability (a
-  tag can be moved; a SHA cannot). [`check.yaml`][] still uses tag pins.
+- Actions in [`check.yaml`][] and [`publish.yaml`][] are pinned to full commit
+  SHAs, with the version in a trailing comment for readability (a tag can be
+  moved; a SHA cannot).
+- A repository ruleset on `main` blocks deletion and force-pushes, requires a
+  linear history, and requires a passing `check` run plus the code-scanning
+  results described under [Workflow lint](#workflow-lint) before the branch
+  moves.
+- A ruleset on `v*` tags blocks moving and deleting them, and immutable releases
+  freeze a release's tag and assets once published, so a `github:` install
+  pinned to a tag keeps resolving to the code that was reviewed. Neither rule
+  ties a tag to `main`, so the publish job checks that itself: it refuses a
+  release whose commit is not in `main`'s history, which is the history the
+  ruleset guards.
+- The publish job skips a release marked as a pre-release on GitHub: a stable
+  version published that way would land on npm's default dist-tag, `latest`,
+  which is what a plain `npm install link-cache` resolves.
 - The publish job installs nothing and runs `npm publish --ignore-scripts`: an
   install under the job that holds the OIDC `id-token` would let
-  registry-delivered code run with publish authority. The check workflow runs on
-  every pull request and on pushes to `main`, but nothing enforces it on the
-  release commit: the [release runbook](release.md) makes a green `main` the
-  precondition for tagging.
+  registry-delivered code run with publish authority.
+- No job restores a package-manager cache (a `setup-node` default); the check
+  job's one dependency downloads in seconds.
+- No job keeps the checkout's token past the checkout step.
 - Publishing is by npm trusted publishing (OIDC from this repo's workflow):
   there is no long-lived token to leak, and every version this workflow
   publishes (0.4.0 onward) carries provenance linking it to the workflow run.
+- The publish job sets no `registry-url`: that `setup-node` input exists for
+  token auth, and npm exchanges the OIDC token at its default registry.
 
 ## The `npx` fallback
 
@@ -95,5 +133,8 @@ the refresh lane's PR step) are in the user docs'
 [`.npmrc`]: ../.npmrc
 [`check.yaml`]: ../.github/workflows/check.yaml
 [otel-supply-chain]: https://opentelemetry.io/site/design/supply-chain-security/
+[otel-zizmor]: https://github.com/open-telemetry/shared-workflows/blob/main/zizmor/README.md
 [`publish.yaml`]: ../.github/workflows/publish.yaml
+[zizmor]: https://docs.zizmor.sh/
+[`zizmor.yaml`]: ../.github/workflows/zizmor.yaml
 <!-- prettier-ignore-end -->

@@ -11,8 +11,8 @@ repo and [`publish.yaml`][] as the publisher.
 ## Before tagging
 
 1. `main` holds everything meant for the release (docs and code land before the
-   tag, not after), and its head's [`check.yaml`][] run is green. This is the
-   gate (why: [Supply-chain posture](supply-chain.md)).
+   tag, not after), and its head's [`check.yaml`][] run is green (why:
+   [Supply-chain posture](supply-chain.md)).
 2. `package.json` `version` is the release version, _`VERSION`_ below. If a bump
    is needed, land it in its own commit with `npm version` _`VERSION`_
    `--no-git-tag-version`, which moves the lockfile's copy too, and update the
@@ -37,12 +37,15 @@ repo and [`publish.yaml`][] as the publisher.
 
 1. Tag the exact `main` commit verified in [Before tagging](#before-tagging),
    _`RELEASE_SHA`_: `git tag v`_`VERSION`_ _`RELEASE_SHA`_, then
-   `git push origin v`_`VERSION`_.
+   `git push origin v`_`VERSION`_. Push the tag before creating the release:
+   with immutable releases on, the release API rejects a tag that does not exist
+   yet.
 2. Create the GitHub release from the tag, with notes: a one-line summary,
-   behavior changes and any migration steps, then the merged PRs. Publishing it
-   is the only trigger of [`publish.yaml`][].
-3. Watch the [`publish.yaml`][] run: it refuses a tag that doesn't match
-   `package.json`, then publishes.
+   behavior changes and any migration steps, then the merged PRs. Leave
+   _Pre-release_ unchecked (why: [Supply-chain posture](supply-chain.md)).
+   Publishing the release is the only trigger of [`publish.yaml`][].
+3. Watch the [`publish.yaml`][] run: it refuses a commit off `main` or a tag
+   that doesn't match `package.json`, then publishes.
 4. Verify on npm: the version appears with a provenance badge,
    `npm view link-cache version` prints it, and the README's doc links on the
    package page resolve (npm rewrites them to this repo).
@@ -61,7 +64,8 @@ If the workflow fails:
    patch version, release again, and point the earlier release's notes at its
    successor.
 
-Never move or delete a tag.
+Never move or delete a release tag; the repository rejects both for `v*` tags
+(why: [Supply-chain posture](supply-chain.md)).
 
 ## Consumer bumps
 

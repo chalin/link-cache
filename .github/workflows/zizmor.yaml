@@ -1,0 +1,22 @@
+name: zizmor
+
+# Workflow lint through the OpenTelemetry shared workflow. Rationale in
+# _docs/supply-chain.md.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: 45 9 * * 5
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  zizmor:
+    permissions:
+      contents: read
+      security-events: write # SARIF upload to code scanning
+    uses: open-telemetry/shared-workflows/.github/workflows/zizmor.yml@68c7b2f0ef9cd9c1e2b71d3018f63127be189578 # v0.14.0
+    with: { persona: pedantic }
