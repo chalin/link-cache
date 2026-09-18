@@ -67,6 +67,13 @@ If the workflow fails:
 Never move or delete a release tag; the repository rejects both for `v*` tags
 (why: [Supply-chain posture](supply-chain.md)).
 
+## Supported versions
+
+Fixes, security fixes included, land on `main` and ship as the next release;
+nothing is backported to an earlier version. A consumer picks a fix up through
+its bump PR (next section) when it pins an exact version, or at its next install
+when it declares a caret range that admits the release.
+
 ## Consumer bumps
 
 Each release is followed by bump PRs in the consumers the maintainer tends. A
