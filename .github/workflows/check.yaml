@@ -18,8 +18,5 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
-      # uv is not on the runner image; `check:workflows` runs zizmor through uvx.
-      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
-        with: { version: 0.12.12, enable-cache: false }
       - run: npm run install:safe
       - run: npm run check

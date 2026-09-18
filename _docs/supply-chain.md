@@ -26,16 +26,17 @@ workflows, one home for the CI toolchain line.
 
 ## Workflow lint
 
-`npm run check` includes `check:workflows`, a [zizmor][] pass over
-`.github/workflows` (unpinned actions, persisted credentials, cache poisoning,
-template injection, and the rest of its default audits). It runs locally before
-a push and again in CI, so a workflow edit cannot land unlinted. zizmor is not
-an npm package, so the script runs it through `uvx` at an exact version, the one
-committed exec of a non-npm tool in this repo: the pin is the control, and a
-bump is reviewed like a dependency and waits out the same seven-day cooldown as
-the `.npmrc` sets for npm. The check workflow installs `uv` (SHA-pinned action,
-pinned `uv` version, cache off) because the runner image lacks it; the publish
-job never runs the lint and never installs `uv`.
+[`zizmor.yaml`][] runs [zizmor][] over `.github/workflows` on every pull request
+and push to `main` (unpinned actions, persisted credentials, cache poisoning,
+template injection, and the rest of its default audits) and uploads the results
+to the repository's Security tab. The step itself passes either way; the `main`
+ruleset's code-scanning rule is what blocks a merge on a finding. Both the
+action and the zizmor version it installs are pinned, and a bump waits out the
+same seven-day cooldown the [`.npmrc`][] sets for npm. The lint is CI-only by
+design: the repo carries no tooling dependency for it, and a local run when
+needed is `uvx zizmor@VERSION .github/workflows`. The job holds the one
+`security-events: write` grant in the repo, alone in its workflow, away from the
+jobs that install or publish.
 
 ## Zero runtime dependencies
 
@@ -92,6 +93,8 @@ unknown key and skip it: `min-release-age` needs npm 11.10,
 - Publishing is by npm trusted publishing (OIDC from this repo's workflow):
   there is no long-lived token to leak, and every version this workflow
   publishes (0.4.0 onward) carries provenance linking it to the workflow run.
+  The workflow sets no `registry-url`: that `setup-node` input exists for token
+  auth, and npm exchanges the OIDC token at its default registry.
 
 ## The `npx` fallback
 
@@ -117,4 +120,5 @@ the refresh lane's PR step) are in the user docs'
 [otel-supply-chain]: https://opentelemetry.io/site/design/supply-chain-security/
 [`publish.yaml`]: ../.github/workflows/publish.yaml
 [zizmor]: https://docs.zizmor.sh/
+[`zizmor.yaml`]: ../.github/workflows/zizmor.yaml
 <!-- prettier-ignore-end -->

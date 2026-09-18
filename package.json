@@ -28,9 +28,8 @@
     "link-cache/refcache.mjs"
   ],
   "scripts": {
-    "check": "npm run check:format && npm run check:workflows && npm test",
+    "check": "npm run check:format && npm test",
     "check:format": "prettier --check .",
-    "check:workflows": "uvx zizmor@1.30.1 --offline .github/workflows",
     "fix:format": "prettier --write .",
     "install:safe": "npm ci --ignore-scripts --no-audit --no-fund",
     "test": "node --test"
