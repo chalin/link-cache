@@ -68,7 +68,9 @@ unknown key and skip it: `min-release-age` needs npm 11.10,
   plain `npm install link-cache` resolves.
 - The publish job installs nothing and runs `npm publish --ignore-scripts`: an
   install under the job that holds the OIDC `id-token` would let
-  registry-delivered code run with publish authority. A repository ruleset on
+  registry-delivered code run with publish authority. For the same reason it
+  restores no package-manager cache (a `setup-node` default) and neither job
+  keeps the checkout's token past the checkout step. A repository ruleset on
   `main` requires the check workflow to pass before a pull request can merge and
   rejects direct pushes, so every `main` commit, including the one a release
   tags, has passed it; the [release runbook](release.md) still reads the head's
