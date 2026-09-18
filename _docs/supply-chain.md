@@ -27,16 +27,17 @@ workflows, one home for the CI toolchain line.
 ## Workflow lint
 
 [`zizmor.yaml`][] runs [zizmor][] over `.github/workflows` on every pull request
-and push to `main` (unpinned actions, persisted credentials, cache poisoning,
-template injection, and the rest of its default audits) and uploads the results
-to the repository's Security tab. The step itself passes either way; the `main`
-ruleset's code-scanning rule is what blocks a merge on a finding. Both the
-action and the zizmor version it installs are pinned, and a bump waits out the
-same seven-day cooldown the [`.npmrc`][] sets for npm. The lint is CI-only by
-design: the repo carries no tooling dependency for it, and a local run when
-needed is `uvx zizmor@VERSION .github/workflows`. The job holds the one
-`security-events: write` grant in the repo, alone in its workflow, away from the
-jobs that install or publish.
+and push to `main`, and weekly (unpinned actions, persisted credentials, cache
+poisoning, template injection, and the rest of its default audits), uploading
+the results to the repository's Security tab. The step itself passes either way;
+the `main` ruleset's code-scanning rule is what blocks a merge on a finding. The
+workflow is a caller of the [OpenTelemetry shared workflow][otel-zizmor], pinned
+to a commit: that workflow pins the zizmor action, which in turn pins the zizmor
+image by digest, so the whole chain is immutable until the pin here moves. The
+lint is CI-only by design: the repo carries no tooling dependency for it, and a
+local run when needed is `uvx zizmor@VERSION .github/workflows`. The job holds
+the one `security-events: write` grant in the repo, alone in its workflow, away
+from the jobs that install or publish.
 
 ## Zero runtime dependencies
 
@@ -118,6 +119,7 @@ the refresh lane's PR step) are in the user docs'
 [`.npmrc`]: ../.npmrc
 [`check.yaml`]: ../.github/workflows/check.yaml
 [otel-supply-chain]: https://opentelemetry.io/site/design/supply-chain-security/
+[otel-zizmor]: https://github.com/open-telemetry/shared-workflows/blob/main/zizmor/README.md
 [`publish.yaml`]: ../.github/workflows/publish.yaml
 [zizmor]: https://docs.zizmor.sh/
 [`zizmor.yaml`]: ../.github/workflows/zizmor.yaml

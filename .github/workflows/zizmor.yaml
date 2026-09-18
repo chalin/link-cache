@@ -7,17 +7,15 @@ on:
   push:
     branches: [main]
   pull_request:
+  schedule:
+    - cron: 45 9 * * 5 # weekly: re-runs the online audits against new advisories
+  workflow_dispatch:
 
 permissions: {}
 
 jobs:
   zizmor:
-    runs-on: ubuntu-latest
     permissions:
       contents: read
       security-events: write # SARIF upload to code scanning
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { persist-credentials: false }
-      - uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
-        with: { version: 1.30.1 }
+    uses: open-telemetry/shared-workflows/.github/workflows/zizmor.yml@68c7b2f0ef9cd9c1e2b71d3018f63127be189578 # v0.14.0
