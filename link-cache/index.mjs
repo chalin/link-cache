@@ -345,7 +345,6 @@ export function parseArgs(argv) {
         try {
           // The operator supplies both this pattern and the URLs it scans, so
           // a slow pattern can only slow their own run.
-          // codeql[js/regex-injection]
           match = new RegExp(value);
         } catch (err) {
           throw new Error(`--match needs a valid regex: ${err.message}`);
