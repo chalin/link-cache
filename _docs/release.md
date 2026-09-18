@@ -39,8 +39,8 @@ repo and [`publish.yaml`][] as the publisher.
 1. Tag the exact `main` commit verified in [Before tagging](#before-tagging),
    _`RELEASE_SHA`_: `git tag v`_`VERSION`_ _`RELEASE_SHA`_, then
    `git push origin v`_`VERSION`_. Push the tag before creating the release:
-   with immutable releases on, GitHub refuses to create a tag as part of a
-   release.
+   with immutable releases on, the release API rejects a tag that does not exist
+   yet.
 2. Create the GitHub release from the tag, with notes: a one-line summary,
    behavior changes and any migration steps, then the merged PRs. Leave
    _Pre-release_ unchecked (why: [Supply-chain posture](supply-chain.md)).
@@ -65,8 +65,8 @@ If the workflow fails:
    patch version, release again, and point the earlier release's notes at its
    successor.
 
-Never move or delete a tag; the repository rejects both (why:
-[Supply-chain posture](supply-chain.md)).
+Never move or delete a release tag; the repository rejects both for `v*` tags
+(why: [Supply-chain posture](supply-chain.md)).
 
 ## Consumer bumps
 
