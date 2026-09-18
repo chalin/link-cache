@@ -32,15 +32,18 @@ uploads the results to the repository's Security tab.
 - Runs on every pull request, on pushes to `main`, and weekly, the weekly run
   catching advisories published against already-pinned actions.
 - The step passes whatever it finds; what blocks a merge is the `main` ruleset,
-  which requires a zizmor and a CodeQL analysis with no security alert of high
-  or higher severity and no error-level alert.
+  which requires a zizmor and a CodeQL analysis and rejects a pull request whose
+  changed lines carry a security alert of high or higher severity or an
+  error-level alert (alerts elsewhere in the tree surface in the Security tab
+  but don't block).
 - The workflow calls the [OpenTelemetry shared workflow][otel-zizmor] at a
   pinned commit; that workflow pins the zizmor action, which pins the zizmor
   image by digest, so nothing in the chain moves until the pin here does.
 - CI-only by design: the repo carries no tooling dependency for it. A local run
-  when needed is `uvx zizmor@VERSION .github/workflows`.
-- The job holds the repo's one `security-events: write` grant, alone in its
-  workflow, away from the jobs that install or publish.
+  when needed is `uvx zizmor@`_`VERSION`_` .github/workflows`, where _`VERSION`_
+  is the zizmor release the shared workflow currently pins.
+- The job's `security-events: write` grant sits alone in its workflow, away from
+  the jobs that install or publish.
 
 ## Zero runtime dependencies
 
@@ -83,16 +86,16 @@ unknown key and skip it: `min-release-age` needs npm 11.10,
   SHAs, with the version in a trailing comment for readability (a tag can be
   moved; a SHA cannot).
 - A repository ruleset on `main` blocks deletion and force-pushes, requires a
-  linear history, and requires a passing `check` run plus clean code-scanning
-  results (see [Workflow lint](#workflow-lint)) before the branch moves: a
-  commit reaches `main` only after the check workflow has passed on it, in
-  practice through a pull request.
+  linear history, and requires a passing `check` run plus the code-scanning
+  results described under [Workflow lint](#workflow-lint) before the branch
+  moves: a commit reaches `main` only after the check workflow has passed on it,
+  in practice through a pull request.
 - A ruleset on `v*` tags blocks moving and deleting them, and immutable releases
   freeze a release's tag and assets once published, so a `github:` install
   pinned to a tag keeps resolving to the code that was reviewed. Neither rule
   ties a tag to `main`, so the publish job checks that itself: it refuses a
-  release whose commit is not on `main`, and only `main`'s commits have passed
-  the ruleset's gates.
+  release whose commit is not in `main`'s history, which is the history the
+  ruleset guards.
 - The publish job skips a release marked as a pre-release on GitHub: a stable
   version published that way would land on npm's default dist-tag, `latest`,
   which is what a plain `npm install link-cache` resolves.

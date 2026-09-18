@@ -27,9 +27,10 @@ jobs:
           node-version-file: .nvmrc
           # A restored cache is only an injection path.
           package-manager-cache: false
-      # A tag can point anywhere; only main's commits have passed the rulesets.
+      # A tag can point anywhere; main is the history the rulesets guard. The
+      # qualified ref: a tag named `origin/main` would shadow the short form.
       - name: Check that the release commit is on main
-        run: git merge-base --is-ancestor HEAD origin/main
+        run: git merge-base --is-ancestor HEAD refs/remotes/origin/main
       - name: Check that the release tag matches the package version
         run: |
           version=$(node -p 'require("./package.json").version')
