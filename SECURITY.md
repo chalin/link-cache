@@ -1,7 +1,6 @@
 # Security policy
 
-Please do not report vulnerabilities in public issues, discussions, or pull
-requests.
+Do not report vulnerabilities in public issues, discussions, or pull requests.
 
 ## Reporting
 
