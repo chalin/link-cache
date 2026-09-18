@@ -70,9 +70,9 @@ Never move or delete a release tag; the repository rejects both for `v*` tags
 ## Supported versions
 
 Fixes, security fixes included, land on `main` and ship as the next release;
-nothing is backported to an earlier version. A consumer picks a fix up through
-its bump PR (next section) when it pins an exact version, or at its next install
-when it declares a caret range that admits the release.
+nothing is backported to an earlier version. A consumer receives a fix when its
+lockfile is refreshed: through its bump PR (next section) for an exact pin, or
+through `npm update` or that same PR for a caret range that admits the release.
 
 ## Consumer bumps
 

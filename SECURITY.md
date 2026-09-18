@@ -10,22 +10,24 @@ saying only that a private report is pending is welcome.
 
 ## Supported versions
 
-Fixes ship in the next release and are not backported. For how consumers receive
-them, see the [release runbook](_docs/release.md#supported-versions).
+For supported versions and how fixes reach consumers, see the
+[release runbook](_docs/release.md#supported-versions).
 
 ## Scope
 
-The CLIs run in consumers' CI with a GitHub token in the environment; anything
-that could expose or misuse it is in scope. The package has no runtime
-dependencies. Documented behavior over the operator's own arguments and cache
-file is not a vulnerability.
+The CLIs run in consumers' CI with a GitHub token in the environment, which
+`lychee-norm-cache` passes on to lychee: report anything in this package that
+could expose or misuse it; defects in lychee itself belong upstream. The package
+has no npm dependencies. Documented behavior whose effects stay within the
+operator's own arguments and cache file is not a vulnerability.
 
 ## Verifying a release
 
-Every version from 0.4.0 is published from this repository's GitHub Actions
-workflow with npm provenance. `npm audit signatures` checks a registry-installed
-copy's signature and attestations; a `github:` install has neither. For how the
-workflow is protected, see [Supply-chain posture](_docs/supply-chain.md).
+`npm audit signatures` checks that a registry-installed copy's signature and
+provenance attestation are valid; it does not check which repository the
+attestation names, and a `github:` install has neither. For which versions carry
+provenance and how the workflow is protected, see
+[Supply-chain posture](_docs/supply-chain.md).
 
 <!-- prettier-ignore-start -->
 [report]: https://github.com/chalin/link-cache/security/advisories/new
