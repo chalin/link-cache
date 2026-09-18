@@ -26,8 +26,9 @@ workflows.
 
 ## Workflow lint
 
-[`zizmor.yaml`][] runs [zizmor][]'s default audits over `.github/workflows` and
-uploads the results to the repository's Security tab.
+[`zizmor.yaml`][] runs [zizmor][] over `.github/workflows` in its pedantic
+persona (the security audits plus its workflow-hygiene ones) and uploads the
+results to the repository's Security tab.
 
 - Runs on every pull request, on pushes to `main`, and weekly, the weekly run
   catching advisories published against already-pinned actions.

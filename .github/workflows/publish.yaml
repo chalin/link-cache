@@ -9,8 +9,14 @@ on:
 
 permissions: {}
 
+# One publish at a time; never cancel one in flight.
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
 jobs:
   publish:
+    name: publish
     # A prerelease would land on the default dist-tag.
     if: ${{ !github.event.release.prerelease }}
     runs-on: ubuntu-latest
