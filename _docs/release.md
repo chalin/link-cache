@@ -11,8 +11,8 @@ repo and [`publish.yaml`][] as the publisher.
 ## Before tagging
 
 1. `main` holds everything meant for the release (docs and code land before the
-   tag, not after), and its head's [`check.yaml`][] run is green. This is the
-   gate for the release commit; nothing else enforces it (why:
+   tag, not after), and its head's [`check.yaml`][] run is green. The publish
+   workflow refuses a commit that is not on `main` (why:
    [Supply-chain posture](supply-chain.md)).
 2. `package.json` `version` is the release version, _`VERSION`_ below. If a bump
    is needed, land it in its own commit with `npm version` _`VERSION`_
@@ -45,8 +45,8 @@ repo and [`publish.yaml`][] as the publisher.
    behavior changes and any migration steps, then the merged PRs. Leave
    _Pre-release_ unchecked (why: [Supply-chain posture](supply-chain.md)).
    Publishing the release is the only trigger of [`publish.yaml`][].
-3. Watch the [`publish.yaml`][] run: it refuses a tag that doesn't match
-   `package.json`, then publishes.
+3. Watch the [`publish.yaml`][] run: it refuses a commit off `main` or a tag
+   that doesn't match `package.json`, then publishes.
 4. Verify on npm: the version appears with a provenance badge,
    `npm view link-cache version` prints it, and the README's doc links on the
    package page resolve (npm rewrites them to this repo).

@@ -90,9 +90,9 @@ unknown key and skip it: `min-release-age` needs npm 11.10,
 - A ruleset on `v*` tags blocks moving and deleting them, and immutable releases
   freeze a release's tag and assets once published, so a `github:` install
   pinned to a tag keeps resolving to the code that was reviewed. Neither rule
-  ties a tag to `main`: nothing enforces that the release commit passed `check`,
-  which is why the [release runbook](release.md) makes a green `main` head the
-  precondition for tagging.
+  ties a tag to `main`, so the publish job checks that itself: it refuses a
+  release whose commit is not on `main`, and only `main`'s commits have passed
+  the ruleset's gates.
 - The publish job skips a release marked as a pre-release on GitHub: a stable
   version published that way would land on npm's default dist-tag, `latest`,
   which is what a plain `npm install link-cache` resolves.

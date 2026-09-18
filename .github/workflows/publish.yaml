@@ -19,12 +19,17 @@ jobs:
       id-token: write # OIDC token that npm trusted publishing exchanges for publish rights
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { persist-credentials: false }
+        with:
+          persist-credentials: false
+          fetch-depth: 0 # the ancestry check below needs main's history
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
           # A restored cache is only an injection path.
           package-manager-cache: false
+      # A tag can point anywhere; only main's commits have passed the rulesets.
+      - name: Check that the release commit is on main
+        run: git merge-base --is-ancestor HEAD origin/main
       - name: Check that the release tag matches the package version
         run: |
           version=$(node -p 'require("./package.json").version')
