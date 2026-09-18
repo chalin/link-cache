@@ -11,9 +11,9 @@ repo and [`publish.yaml`][] as the publisher.
 ## Before tagging
 
 1. `main` holds everything meant for the release (docs and code land before the
-   tag, not after), and its head's [`check.yaml`][] run is green. Changes reach
-   `main` through pull requests only: its ruleset requires the check run and
-   rejects direct pushes (why: [Supply-chain posture](supply-chain.md)).
+   tag, not after), and its head's [`check.yaml`][] run is green. This is the
+   gate for the release commit; nothing else enforces it (why:
+   [Supply-chain posture](supply-chain.md)).
 2. `package.json` `version` is the release version, _`VERSION`_ below. If a bump
    is needed, land it in its own commit with `npm version` _`VERSION`_
    `--no-git-tag-version`, which moves the lockfile's copy too, and update the
@@ -43,9 +43,8 @@ repo and [`publish.yaml`][] as the publisher.
    release.
 2. Create the GitHub release from the tag, with notes: a one-line summary,
    behavior changes and any migration steps, then the merged PRs. Leave
-   _Pre-release_ unchecked: the workflow skips pre-releases, which would
-   otherwise reach npm's `latest`. Publishing the release is the only trigger of
-   [`publish.yaml`][].
+   _Pre-release_ unchecked (why: [Supply-chain posture](supply-chain.md)).
+   Publishing the release is the only trigger of [`publish.yaml`][].
 3. Watch the [`publish.yaml`][] run: it refuses a tag that doesn't match
    `package.json`, then publishes.
 4. Verify on npm: the version appears with a provenance badge,
@@ -66,9 +65,8 @@ If the workflow fails:
    patch version, release again, and point the earlier release's notes at its
    successor.
 
-Never move or delete a tag. A repository ruleset on `v*` tags rejects both, and
-immutable releases freeze a release's tag and assets once it is published: a
-`github:` install pinned to a tag keeps resolving to the code that was reviewed.
+Never move or delete a tag; the repository rejects both (why:
+[Supply-chain posture](supply-chain.md)).
 
 ## Consumer bumps
 

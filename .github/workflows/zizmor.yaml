@@ -1,7 +1,7 @@
 name: zizmor
 
-# Findings land in the Security tab; the `main` ruleset's code-scanning rule is
-# what blocks a merge on them (the step itself passes in SARIF mode).
+# Workflow lint through the OpenTelemetry shared workflow. Rationale in
+# _docs/supply-chain.md.
 
 on:
   push:

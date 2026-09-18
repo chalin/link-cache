@@ -22,22 +22,25 @@ npm run check
 
 Tests use Node's built-in test runner and need neither network access nor the
 Lychee binary. `.nvmrc` pins the Node version for `nvm use` and for both
-workflows, one home for the CI toolchain line.
+workflows.
 
 ## Workflow lint
 
-[`zizmor.yaml`][] runs [zizmor][] over `.github/workflows` on every pull request
-and push to `main`, and weekly (unpinned actions, persisted credentials, cache
-poisoning, template injection, and the rest of its default audits), uploading
-the results to the repository's Security tab. The step itself passes either way;
-the `main` ruleset's code-scanning rule is what blocks a merge on a finding. The
-workflow is a caller of the [OpenTelemetry shared workflow][otel-zizmor], pinned
-to a commit: that workflow pins the zizmor action, which in turn pins the zizmor
-image by digest, so the whole chain is immutable until the pin here moves. The
-lint is CI-only by design: the repo carries no tooling dependency for it, and a
-local run when needed is `uvx zizmor@VERSION .github/workflows`. The job holds
-the one `security-events: write` grant in the repo, alone in its workflow, away
-from the jobs that install or publish.
+[`zizmor.yaml`][] runs [zizmor][]'s default audits over `.github/workflows` and
+uploads the results to the repository's Security tab.
+
+- Runs on every pull request, on pushes to `main`, and weekly, the weekly run
+  catching advisories published against already-pinned actions.
+- The step passes whatever it finds; what blocks a merge is the `main` ruleset,
+  which requires a zizmor and a CodeQL analysis with no security alert of high
+  or higher severity and no error-level alert.
+- The workflow calls the [OpenTelemetry shared workflow][otel-zizmor] at a
+  pinned commit; that workflow pins the zizmor action, which pins the zizmor
+  image by digest, so nothing in the chain moves until the pin here does.
+- CI-only by design: the repo carries no tooling dependency for it. A local run
+  when needed is `uvx zizmor@VERSION .github/workflows`.
+- The job holds the repo's one `security-events: write` grant, alone in its
+  workflow, away from the jobs that install or publish.
 
 ## Zero runtime dependencies
 
@@ -74,23 +77,31 @@ unknown key and skip it: `min-release-age` needs npm 11.10,
 - `script-shell`: one interpreter for npm scripts on every platform (npm on
   Windows defaults to `cmd.exe`, whose quoting diverges silently).
 
-## Pinned actions and a script-free publish
+## Pinned actions, protected refs, and a script-free publish
 
 - Actions in [`check.yaml`][] and [`publish.yaml`][] are pinned to full commit
   SHAs, with the version in a trailing comment for readability (a tag can be
   moved; a SHA cannot).
-- The publish job skips a release marked as a pre-release: `npm publish` puts
-  every version it publishes on the default dist-tag, `latest`, which is what a
-  plain `npm install link-cache` resolves.
+- A repository ruleset on `main` blocks deletion and force-pushes, requires a
+  linear history, and requires a passing `check` run plus clean code-scanning
+  results (see [Workflow lint](#workflow-lint)) before the branch moves: a
+  commit reaches `main` only after the check workflow has passed on it, in
+  practice through a pull request.
+- A ruleset on `v*` tags blocks moving and deleting them, and immutable releases
+  freeze a release's tag and assets once published, so a `github:` install
+  pinned to a tag keeps resolving to the code that was reviewed. Neither rule
+  ties a tag to `main`: nothing enforces that the release commit passed `check`,
+  which is why the [release runbook](release.md) makes a green `main` head the
+  precondition for tagging.
+- The publish job skips a release marked as a pre-release on GitHub: a stable
+  version published that way would land on npm's default dist-tag, `latest`,
+  which is what a plain `npm install link-cache` resolves.
 - The publish job installs nothing and runs `npm publish --ignore-scripts`: an
   install under the job that holds the OIDC `id-token` would let
-  registry-delivered code run with publish authority. For the same reason it
-  restores no package-manager cache (a `setup-node` default) and neither job
-  keeps the checkout's token past the checkout step. A repository ruleset on
-  `main` requires the check workflow to pass before a pull request can merge and
-  rejects direct pushes, so every `main` commit, including the one a release
-  tags, has passed it; the [release runbook](release.md) still reads the head's
-  run before tagging.
+  registry-delivered code run with publish authority.
+- For the same reason the publish job restores no package-manager cache (a
+  `setup-node` default), and neither job keeps the checkout's token past the
+  checkout step.
 - Publishing is by npm trusted publishing (OIDC from this repo's workflow):
   there is no long-lived token to leak, and every version this workflow
   publishes (0.4.0 onward) carries provenance linking it to the workflow run.
