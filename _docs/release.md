@@ -11,8 +11,9 @@ repo and [`publish.yaml`][] as the publisher.
 ## Before tagging
 
 1. `main` holds everything meant for the release (docs and code land before the
-   tag, not after), and its head's [`check.yaml`][] run is green. This is the
-   gate (why: [Supply-chain posture](supply-chain.md)).
+   tag, not after), and its head's [`check.yaml`][] run is green. Changes reach
+   `main` through pull requests only: its ruleset requires the check run and
+   rejects direct pushes (why: [Supply-chain posture](supply-chain.md)).
 2. `package.json` `version` is the release version, _`VERSION`_ below. If a bump
    is needed, land it in its own commit with `npm version` _`VERSION`_
    `--no-git-tag-version`, which moves the lockfile's copy too, and update the

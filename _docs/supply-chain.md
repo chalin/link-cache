@@ -68,10 +68,11 @@ unknown key and skip it: `min-release-age` needs npm 11.10,
   plain `npm install link-cache` resolves.
 - The publish job installs nothing and runs `npm publish --ignore-scripts`: an
   install under the job that holds the OIDC `id-token` would let
-  registry-delivered code run with publish authority. The check workflow runs on
-  every pull request and on pushes to `main`, but nothing enforces it on the
-  release commit: the [release runbook](release.md) makes a green `main` the
-  precondition for tagging.
+  registry-delivered code run with publish authority. A repository ruleset on
+  `main` requires the check workflow to pass before a pull request can merge and
+  rejects direct pushes, so every `main` commit, including the one a release
+  tags, has passed it; the [release runbook](release.md) still reads the head's
+  run before tagging.
 - Publishing is by npm trusted publishing (OIDC from this repo's workflow):
   there is no long-lived token to leak, and every version this workflow
   publishes (0.4.0 onward) carries provenance linking it to the workflow run.
