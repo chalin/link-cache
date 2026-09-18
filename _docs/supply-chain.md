@@ -102,10 +102,12 @@ unknown key and skip it: `min-release-age` needs npm 11.10,
 - The publish job installs nothing and runs `npm publish --ignore-scripts`: an
   install under the job that holds the OIDC `id-token` would let
   registry-delivered code run with publish authority.
-- Pins move by [Renovate][] pull requests only ([`renovate.jsonc`][]): the
-  action SHAs and their version comments, the shared-workflow SHA, the dev
-  dependency, and the `.nvmrc` Node version, each after a 7-day release
-  cooldown, and each vetted like any other dependency pull request.
+- Pins move by [Renovate][] pull requests ([`renovate.jsonc`][]): the action
+  SHAs and their version comments, the shared-workflow SHA, the dev dependency,
+  and the `.nvmrc` Node version, each after a 7-day release cooldown and each
+  vetted like any other dependency pull request. A digest-only update (an
+  upstream tag re-pointed to a new commit) is the one shape the cooldown can't
+  age, so it waits for approval on the Dependency Dashboard instead.
 - No job restores a package-manager cache (a `setup-node` default); the check
   job's one dependency downloads in seconds.
 - No job keeps the checkout's token past the checkout step.

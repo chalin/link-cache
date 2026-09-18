@@ -8,6 +8,14 @@
   ],
   "enabledManagers": ["github-actions", "npm", "nvm"],
   "minimumReleaseAge": "7 days",
+  "packageRules": [
+    {
+      // A re-pointed upstream tag arrives as a digest update aged against the
+      // tag's original release date, so the cooldown can't hold it.
+      "matchUpdateTypes": ["digest"],
+      "dependencyDashboardApproval": true,
+    },
+  ],
   "schedule": ["* * * * 0"], // Sunday (UTC)
   "labels": ["dependencies"],
 }
