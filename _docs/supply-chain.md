@@ -99,9 +99,9 @@ unknown key and skip it: `min-release-age` needs npm 11.10,
 - The publish job installs nothing and runs `npm publish --ignore-scripts`: an
   install under the job that holds the OIDC `id-token` would let
   registry-delivered code run with publish authority.
-- For the same reason the publish job restores no package-manager cache (a
-  `setup-node` default), and neither job keeps the checkout's token past the
-  checkout step.
+- No job restores a package-manager cache (a `setup-node` default): the publish
+  job installs nothing, and the check job's one dependency downloads in seconds.
+  Neither job keeps the checkout's token past the checkout step.
 - Publishing is by npm trusted publishing (OIDC from this repo's workflow):
   there is no long-lived token to leak, and every version this workflow
   publishes (0.4.0 onward) carries provenance linking it to the workflow run.
