@@ -102,6 +102,10 @@ unknown key and skip it: `min-release-age` needs npm 11.10,
 - The publish job installs nothing and runs `npm publish --ignore-scripts`: an
   install under the job that holds the OIDC `id-token` would let
   registry-delivered code run with publish authority.
+- Pins move by [Renovate][] pull requests only ([`renovate.jsonc`][]): the
+  action SHAs and their version comments, the shared-workflow SHA, the dev
+  dependency, and the `.nvmrc` Node version, each after a 7-day release
+  cooldown, and each vetted like any other dependency pull request.
 - No job restores a package-manager cache (a `setup-node` default); the check
   job's one dependency downloads in seconds.
 - No job keeps the checkout's token past the checkout step.
@@ -135,6 +139,8 @@ the refresh lane's PR step) are in the user docs'
 [otel-supply-chain]: https://opentelemetry.io/site/design/supply-chain-security/
 [otel-zizmor]: https://github.com/open-telemetry/shared-workflows/blob/main/zizmor/README.md
 [`publish.yaml`]: ../.github/workflows/publish.yaml
+[Renovate]: https://docs.renovatebot.com/
+[`renovate.jsonc`]: ../renovate.jsonc
 [zizmor]: https://docs.zizmor.sh/
 [`zizmor.yaml`]: ../.github/workflows/zizmor.yaml
 <!-- prettier-ignore-end -->
