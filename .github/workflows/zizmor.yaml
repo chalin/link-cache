@@ -8,7 +8,7 @@ on:
     branches: [main]
   pull_request:
   schedule:
-    - cron: 45 9 * * 5 # weekly: re-runs the online audits against new advisories
+    - cron: 45 9 * * 5
   workflow_dispatch:
 
 permissions: {}

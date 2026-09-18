@@ -9,7 +9,6 @@ on:
 
 permissions: {}
 
-# One publish at a time; never cancel one in flight.
 concurrency:
   group: publish
   cancel-in-progress: false
@@ -17,7 +16,6 @@ concurrency:
 jobs:
   publish:
     name: publish
-    # A prerelease would land on the default dist-tag.
     if: ${{ !github.event.release.prerelease }}
     runs-on: ubuntu-latest
     permissions:
@@ -27,14 +25,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          fetch-depth: 0 # the ancestry check below needs main's history
+          fetch-depth: 0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
           # A restored cache is only an injection path.
           package-manager-cache: false
-      # A tag can point anywhere; main is the history the rulesets guard. The
-      # qualified ref: a tag named `origin/main` would shadow the short form.
+      # Qualified ref: a tag named `origin/main` would shadow the short form.
       - name: Check that the release commit is on main
         run: git merge-base --is-ancestor HEAD refs/remotes/origin/main
       - name: Check that the release tag matches the package version

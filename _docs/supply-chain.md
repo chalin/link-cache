@@ -89,8 +89,7 @@ unknown key and skip it: `min-release-age` needs npm 11.10,
 - A repository ruleset on `main` blocks deletion and force-pushes, requires a
   linear history, and requires a passing `check` run plus the code-scanning
   results described under [Workflow lint](#workflow-lint) before the branch
-  moves: a commit reaches `main` only after the check workflow has passed on it,
-  in practice through a pull request.
+  moves.
 - A ruleset on `v*` tags blocks moving and deleting them, and immutable releases
   freeze a release's tag and assets once published, so a `github:` install
   pinned to a tag keeps resolving to the code that was reviewed. Neither rule
@@ -103,14 +102,14 @@ unknown key and skip it: `min-release-age` needs npm 11.10,
 - The publish job installs nothing and runs `npm publish --ignore-scripts`: an
   install under the job that holds the OIDC `id-token` would let
   registry-delivered code run with publish authority.
-- No job restores a package-manager cache (a `setup-node` default): the publish
-  job installs nothing, and the check job's one dependency downloads in seconds.
-  Neither job keeps the checkout's token past the checkout step.
+- No job restores a package-manager cache (a `setup-node` default); the check
+  job's one dependency downloads in seconds.
+- No job keeps the checkout's token past the checkout step.
 - Publishing is by npm trusted publishing (OIDC from this repo's workflow):
   there is no long-lived token to leak, and every version this workflow
   publishes (0.4.0 onward) carries provenance linking it to the workflow run.
-  The workflow sets no `registry-url`: that `setup-node` input exists for token
-  auth, and npm exchanges the OIDC token at its default registry.
+- The publish job sets no `registry-url`: that `setup-node` input exists for
+  token auth, and npm exchanges the OIDC token at its default registry.
 
 ## The `npx` fallback
 

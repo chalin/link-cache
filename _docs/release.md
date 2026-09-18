@@ -11,8 +11,7 @@ repo and [`publish.yaml`][] as the publisher.
 ## Before tagging
 
 1. `main` holds everything meant for the release (docs and code land before the
-   tag, not after), and its head's [`check.yaml`][] run is green. The publish
-   workflow refuses a commit that is not on `main` (why:
+   tag, not after), and its head's [`check.yaml`][] run is green (why:
    [Supply-chain posture](supply-chain.md)).
 2. `package.json` `version` is the release version, _`VERSION`_ below. If a bump
    is needed, land it in its own commit with `npm version` _`VERSION`_
