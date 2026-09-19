@@ -15,11 +15,11 @@ For supported versions and how fixes reach consumers, see the
 
 ## Scope
 
-The CLIs run in consumers' CI with a GitHub token in the environment, which
-`lychee-norm-cache` passes on to lychee: report anything in this package that
-could expose or misuse it; defects in lychee itself belong upstream. The package
-has no npm dependencies. Documented behavior whose effects stay within the
-operator's own arguments and cache file is not a vulnerability.
+Anything in this package is in scope. The high-impact case: the CLIs run in
+consumers' CI with a GitHub token in the environment, which `lychee-norm-cache`
+passes on to lychee; defects in lychee itself belong upstream. The published
+package depends on no npm packages. Documented behavior whose effects stay
+within the operator's own arguments and cache file is not a vulnerability.
 
 ## Verifying a release
 
