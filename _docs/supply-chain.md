@@ -93,19 +93,18 @@ the [Mend Renovate app][renovate-app].
 Actions need two more settings, because an action release is a git tag, and a
 tag says nothing about the commit it points at today:
 
-- **Looked up as GitHub Releases.** Renovate's default considers every tag, aged
-  by dates that whoever pushed the tag chose. A [Release][renovate-releases]
-  carries a publication date that GitHub sets, and a tag with no Release is
-  never proposed.
+- **Looked up as GitHub Releases.** Renovate's default considers every tag,
+  dated by whoever pushed it. A [Release][renovate-releases] carries a
+  publication date that GitHub sets, and a tag with no Release is never
+  proposed.
 - **The proposed commit in the branch name.** A released tag can be re-pointed
   after its release has aged, and Renovate would propose the new commit under
-  the old date. With the commit in the branch name that is a new pull request,
-  not a quiet update to an open one, and the review compares the commit to the
-  tag as it stands upstream.
+  the old date. Named by commit, that is a new pull request rather than a quiet
+  update to an open one, and the review compares the commit to the tag as it
+  stands upstream.
 
-Before that review, a bump runs only in the pull-request jobs, whose grants are
-the `permissions` blocks in the workflows ([Workflow lint](#workflow-lint)
-covers the one write grant).
+Before that review, a bump runs only in the pull-request jobs, under their
+`permissions` blocks.
 
 ## Pinned actions, protected refs, and a script-free publish
 
