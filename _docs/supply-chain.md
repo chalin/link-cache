@@ -104,18 +104,20 @@ unknown key and skip it: `min-release-age` needs npm 11.10,
   registry-delivered code run with publish authority.
 - Pins move by [Renovate][] pull requests ([`renovate.jsonc`][]): the action
   SHAs and their version comments, the shared-workflow SHA, the dev dependency,
-  and the `.nvmrc` Node version, each after a 7-day release cooldown and each
-  vetted like any other dependency pull request. Actions get two more controls,
-  because a cooldown can't vouch for a git tag. They are looked up as GitHub
-  Releases, whose publication date GitHub sets: a bare tag carries only git
-  dates, which whoever pushes the tag chooses, and a tag without a Release is
-  not a candidate at all. And every action update waits on the Dependency
-  Dashboard for the maintainer's tick, since even a released tag can be
-  re-pointed to new code after its release has aged, so the version Renovate
-  proposes says nothing about the commit it carries; the tick follows an API
-  check of that commit (the vet's cooldown step), and each tick is good for one
-  SHA only. Nothing an upstream publishes runs here before a person has looked
-  at it.
+  and the `.nvmrc` Node version. Renovate proposes a version once its release is
+  7 days old (a security-alert fix skips the wait), and each pull request is
+  reviewed like any other dependency bump before merge. Two settings make the
+  cooldown mean something for actions, whose releases are git tags:
+  - Actions are looked up as GitHub Releases, whose publication date GitHub
+    sets. A bare tag carries only git dates, which whoever pushes the tag
+    chooses, and a tag without a Release is not a candidate at all.
+  - A bump's branch name carries the commit it proposes. A released tag can be
+    re-pointed after its release has aged, and Renovate would then propose the
+    new commit under the old date; with the commit in the name, that is a new
+    pull request, not a quiet update to an open one, and the review compares the
+    commit to the tag as it stands upstream. What a bump can do before that
+    review is run once in the `check` job, which holds a read-only token and
+    nothing else.
 - No job restores a package-manager cache (a `setup-node` default); the check
   job's one dependency downloads in seconds.
 - No job keeps the checkout's token past the checkout step.

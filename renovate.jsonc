@@ -10,16 +10,11 @@
   "minimumReleaseAge": "7 days",
   "packageRules": [
     {
-      // Actions are looked up as GitHub Releases, whose publication date GitHub
-      // sets; the default github-tags lookup falls back to the git commit or
-      // tagger date, which whoever pushes the tag chooses. The cooldown still
-      // can't bind a version to its code: a release's tag can be re-pointed
-      // after it has aged, so every action update waits for a dashboard tick,
-      // taken after the maintainer has checked the SHA (_docs/supply-chain.md).
-      // The SHA in the branch name makes each tick good for that SHA only.
+      // Actions are looked up as GitHub Releases, and a bump's branch name
+      // carries its SHA; why: _docs/supply-chain.md § Pinned actions.
       "matchManagers": ["github-actions"],
+      "matchDepTypes": ["action", "workflow"],
       "overrideDatasource": "github-releases",
-      "dependencyDashboardApproval": true,
       "branchTopic": "{{{depNameSanitized}}}-{{{newDigest}}}",
     },
   ],
