@@ -5,8 +5,8 @@ Do not report vulnerabilities in public issues, discussions, or pull requests.
 ## Reporting
 
 Use GitHub's [private vulnerability reporting][report]; fixes and disclosure go
-through a GitHub security advisory. If a report goes unanswered, a public issue
-saying only that a private report is pending is welcome.
+through a GitHub security advisory. If you cannot use GitHub, email
+<pchalin@gmail.com>.
 
 ## Supported versions
 
