@@ -10,8 +10,8 @@
   "minimumReleaseAge": "7 days",
   "packageRules": [
     {
-      // Actions are looked up as GitHub Releases, and a bump's branch name
-      // carries its SHA; why: _docs/supply-chain.md § Pinned actions.
+      // Rationale: _docs/supply-chain.md § Dependency bumps. Scoped to action
+      // refs: runner labels have no GitHub Releases.
       "matchManagers": ["github-actions"],
       "matchDepTypes": ["action", "workflow"],
       "overrideDatasource": "github-releases",

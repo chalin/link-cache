@@ -81,11 +81,38 @@ unknown key and skip it: `min-release-age` needs npm 11.10,
 - `script-shell`: one interpreter for npm scripts on every platform (npm on
   Windows defaults to `cmd.exe`, whose quoting diverges silently).
 
+## Dependency bumps
+
+[Renovate][] opens the pull requests that move this repository's pins: the
+actions in the workflows, the dev dependency, and the Node version in `.nvmrc`.
+[`renovate.jsonc`][] scopes it to those and sets a [release
+cooldown][renovate-age] (a security-alert fix skips the wait); every bump is
+reviewed before merge. The config is inert until the repository is enabled in
+the [Mend Renovate app][renovate-app].
+
+Actions need two more settings, because an action release is a git tag, and a
+tag says nothing about the commit it points at today:
+
+- **Looked up as GitHub Releases.** Renovate's default considers every tag, aged
+  by dates that whoever pushed the tag chose. A [Release][renovate-releases]
+  carries a publication date that GitHub sets, and a tag with no Release is
+  never proposed.
+- **The proposed commit in the branch name.** A released tag can be re-pointed
+  after its release has aged, and Renovate would propose the new commit under
+  the old date. With the commit in the branch name that is a new pull request,
+  not a quiet update to an open one, and the review compares the commit to the
+  tag as it stands upstream.
+
+Before that review, a bump runs only in the pull-request jobs, whose grants are
+the `permissions` blocks in the workflows ([Workflow lint](#workflow-lint)
+covers the one write grant).
+
 ## Pinned actions, protected refs, and a script-free publish
 
 - Actions in [`check.yaml`][] and [`publish.yaml`][] are pinned to full commit
   SHAs, with the version in a trailing comment for readability (a tag can be
-  moved; a SHA cannot).
+  moved; a SHA cannot). How the pins move:
+  [Dependency bumps](#dependency-bumps).
 - A repository ruleset on `main` blocks deletion and force-pushes, requires a
   linear history, and requires a passing `check` run plus the code-scanning
   results described under [Workflow lint](#workflow-lint) before the branch
@@ -102,22 +129,6 @@ unknown key and skip it: `min-release-age` needs npm 11.10,
 - The publish job installs nothing and runs `npm publish --ignore-scripts`: an
   install under the job that holds the OIDC `id-token` would let
   registry-delivered code run with publish authority.
-- Pins move by [Renovate][] pull requests ([`renovate.jsonc`][]): the action
-  SHAs and their version comments, the shared-workflow SHA, the dev dependency,
-  and the `.nvmrc` Node version. Renovate proposes a version once its release is
-  7 days old (a security-alert fix skips the wait), and each pull request is
-  reviewed like any other dependency bump before merge. Two settings make the
-  cooldown mean something for actions, whose releases are git tags:
-  - Actions are looked up as GitHub Releases, whose publication date GitHub
-    sets. A bare tag carries only git dates, which whoever pushes the tag
-    chooses, and a tag without a Release is not a candidate at all.
-  - A bump's branch name carries the commit it proposes. A released tag can be
-    re-pointed after its release has aged, and Renovate would then propose the
-    new commit under the old date; with the commit in the name, that is a new
-    pull request, not a quiet update to an open one, and the review compares the
-    commit to the tag as it stands upstream. What a bump can do before that
-    review is run once in the `check` job, which holds a read-only token and
-    nothing else.
 - No job restores a package-manager cache (a `setup-node` default); the check
   job's one dependency downloads in seconds.
 - No job keeps the checkout's token past the checkout step.
@@ -152,6 +163,9 @@ the refresh lane's PR step) are in the user docs'
 [otel-zizmor]: https://github.com/open-telemetry/shared-workflows/blob/main/zizmor/README.md
 [`publish.yaml`]: ../.github/workflows/publish.yaml
 [Renovate]: https://docs.renovatebot.com/
+[renovate-age]: https://docs.renovatebot.com/key-concepts/minimum-release-age/
+[renovate-app]: https://docs.renovatebot.com/getting-started/installing-onboarding/#hosted-githubcom-app
+[renovate-releases]: https://docs.renovatebot.com/modules/datasource/github-releases/
 [`renovate.jsonc`]: ../renovate.jsonc
 [zizmor]: https://docs.zizmor.sh/
 [`zizmor.yaml`]: ../.github/workflows/zizmor.yaml
