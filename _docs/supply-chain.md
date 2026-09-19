@@ -105,9 +105,13 @@ unknown key and skip it: `min-release-age` needs npm 11.10,
 - Pins move by [Renovate][] pull requests ([`renovate.jsonc`][]): the action
   SHAs and their version comments, the shared-workflow SHA, the dev dependency,
   and the `.nvmrc` Node version, each after a 7-day release cooldown and each
-  vetted like any other dependency pull request. A digest-only update (an
-  upstream tag re-pointed to a new commit) is the one shape the cooldown can't
-  age, so it waits for approval on the Dependency Dashboard instead.
+  vetted like any other dependency pull request. Two rules keep the cooldown
+  honest for actions. They are looked up as GitHub Releases, whose publication
+  date GitHub sets: a bare tag carries only git dates, which whoever pushes the
+  tag chooses, and a tag without a Release is not a candidate at all. And a
+  digest-only update, an upstream tag re-pointed to a new commit, waits for
+  approval on the Dependency Dashboard, since Renovate ages it against the tag's
+  original release; a released tag has no routine reason to move.
 - No job restores a package-manager cache (a `setup-node` default); the check
   job's one dependency downloads in seconds.
 - No job keeps the checkout's token past the checkout step.

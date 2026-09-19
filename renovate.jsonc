@@ -10,6 +10,13 @@
   "minimumReleaseAge": "7 days",
   "packageRules": [
     {
+      // Age actions by their GitHub Release date (server-set) and consider only
+      // released versions: the default github-tags lookup falls back to the git
+      // commit or tagger date, which whoever pushes the tag chooses.
+      "matchManagers": ["github-actions"],
+      "overrideDatasource": "github-releases",
+    },
+    {
       // A re-pointed upstream tag arrives as a digest update aged against the
       // tag's original release date, so the cooldown can't hold it.
       "matchUpdateTypes": ["digest"],
