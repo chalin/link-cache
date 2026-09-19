@@ -83,32 +83,61 @@ unknown key and skip it: `min-release-age` needs npm 11.10,
 
 ## Dependency bumps
 
-[Renovate][] opens the pull requests that move this repository's pins:
+[Renovate][] (the Mend-hosted GitHub app) opens the pull requests that move this
+repository's pins:
 
-- Actions and the shared workflow in `.github/workflows/`
-- Dev dependencies in `package.json`
+- The `uses:` refs in `.github/workflows/`: two actions, `actions/checkout` and
+  `actions/setup-node`, and the reusable zizmor workflow from
+  `open-telemetry/shared-workflows`. Renovate rewrites each ref's SHA and its
+  `# vX.Y.Z` comment together.
+- The dev dependencies in `package.json`
 - The Node version in `.nvmrc`
 
-[`renovate.jsonc`][] scopes it to those and sets a [release
-cooldown][renovate-age] (a security-alert fix skips the wait); every bump is
-reviewed before merge. The config is inert until the repository is enabled in
-the [Mend Renovate app][renovate-app].
+[`renovate.jsonc`][] limits Renovate to those three managers, sets the schedule
+on which it opens pull requests, and sets a [minimum release age][renovate-age]:
+the cooldown a version must have passed before Renovate proposes it (Renovate's
+default exempts a fix for a security alert). It complements `.npmrc`'s
+`min-release-age`, which gates what npm resolves and so reaches neither actions
+nor Node. Updates Renovate has found but not yet proposed appear in the
+Dependency Dashboard issue it keeps in the repository. The config does nothing
+until the repository owner enables the repository in the [Mend Renovate
+app][renovate-app], a one-time step.
 
-Actions need two more settings, because an action release is a git tag, and a
-tag says nothing about the commit it points at today:
+A maintainer reviews every Renovate pull request before merging it, as with any
+dependency bump; there is no automerge. For an action bump, the maintainer
+checks three things: the release exists on GitHub and is older than the
+cooldown; the SHA in the pull request is the commit the version tag points at
+upstream now; and that commit is on the upstream's default or release branch.
+The last two checks and two settings in `renovate.jsonc` exist for one reason:
+an action's version is a git tag, a tag can be moved to a different commit at
+any time, and so a version number says nothing about which commit it names
+today.
 
-- **Looked up as GitHub Releases.** Renovate's default considers every tag,
-  dated by whoever pushed it. A [Release][renovate-releases] carries a
-  publication date that GitHub sets, and a tag with no Release is never
-  proposed.
-- **The proposed commit in the branch name.** A released tag can be re-pointed
-  after its release has aged, and Renovate would propose the new commit under
-  the old date. Named by commit, that is a new pull request rather than a quiet
-  update to an open one, and the review compares the commit to the tag as it
-  stands upstream.
+- `overrideDatasource`: by default, Renovate dates an action version by its git
+  tag, and a tag's date is set by whoever pushed the tag, so a tag can be given
+  a date that already clears the cooldown. With it set to `github-releases`,
+  Renovate considers only versions that have a [GitHub
+  Release][renovate-releases] and dates each by the Release's publication time,
+  which GitHub sets. A tag with no Release is never proposed.
+- `branchTopic`: a released tag can be moved after its Release is old enough to
+  pass the cooldown, and Renovate would then propose the new commit as if it
+  were the aged release. The branch name includes the SHA Renovate proposes, so
+  a moved tag produces a new pull request (Renovate closes the old one) instead
+  of a silent change to an open one. The setting makes the move visible; the
+  maintainer's SHA and branch checks are what stop it.
 
-Before that review, a bump runs only in the pull-request jobs, under their
-`permissions` blocks.
+The rule that holds both settings matches action and reusable-workflow refs
+only; runner labels (`runs-on: ubuntu-latest`) have no GitHub Releases and keep
+Renovate's default lookup.
+
+Before a maintainer reviews a bump pull request, that pull request's own CI has
+already run the proposed commit: an action in the `check` job of
+[`check.yaml`][], the shared workflow in the `zizmor` job of [`zizmor.yaml`][].
+Each job's token has `contents: read`; the zizmor job's also has
+`security-events: write`. The publish job of [`publish.yaml`][], the only job
+with publish authority (`id-token: write`), runs when a release is published, so
+only after a merge and after a maintainer cuts the release. An unreviewed commit
+therefore runs with those two grants at most, and never with publish authority.
 
 ## Pinned actions, protected refs, and a script-free publish
 
