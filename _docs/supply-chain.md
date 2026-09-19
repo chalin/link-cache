@@ -83,8 +83,12 @@ unknown key and skip it: `min-release-age` needs npm 11.10,
 
 ## Dependency bumps
 
-[Renovate][] opens the pull requests that move this repository's pins: the
-actions in the workflows, the dev dependency, and the Node version in `.nvmrc`.
+[Renovate][] opens the pull requests that move this repository's pins:
+
+- Actions and the shared workflow in `.github/workflows/`
+- Dev dependencies in `package.json`
+- The Node version in `.nvmrc`
+
 [`renovate.jsonc`][] scopes it to those and sets a [release
 cooldown][renovate-age] (a security-alert fix skips the wait); every bump is
 reviewed before merge. The config is inert until the repository is enabled in
