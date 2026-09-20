@@ -81,11 +81,74 @@ unknown key and skip it: `min-release-age` needs npm 11.10,
 - `script-shell`: one interpreter for npm scripts on every platform (npm on
   Windows defaults to `cmd.exe`, whose quoting diverges silently).
 
+## Dependency bumps
+
+[Renovate][] (the Mend-hosted GitHub app) opens the pull requests that move this
+repository's pins:
+
+- The `uses:` refs in `.github/workflows/`: two actions, `actions/checkout` and
+  `actions/setup-node`, and the reusable zizmor workflow from
+  `open-telemetry/shared-workflows`
+- The dev dependencies in `package.json` and `package-lock.json`
+- The Node version in `.nvmrc`
+
+[`renovate.jsonc`][] limits Renovate to those three managers, sets the schedule
+on which it opens pull requests, and sets a [minimum release age][renovate-age]:
+the cooldown a version must have passed before Renovate proposes it (Renovate's
+default exempts a fix for a security alert). It complements `.npmrc`'s
+`min-release-age`, which gates what npm resolves and so reaches neither actions
+nor Node.
+
+A maintainer reviews every Renovate pull request before merging it; there is no
+automerge. For an action bump, the review establishes that the commit the pull
+request pins is the one the version's release names, and that the release has
+aged. The checks, with their `gh` calls:
+[Dependency-bump review](dependency-bumps.md).
+
+When a pin has not moved, look in two places. The Dependency Dashboard issue
+Renovate keeps in the repository lists the updates it has found but not yet
+proposed. And the config does nothing until the repository owner enables the
+repository in the [Mend Renovate app][renovate-app], a one-time step whose
+absence looks exactly like silence.
+
+Two settings in the action rule exist because an action's version is a git tag,
+which can be moved to another commit at any time:
+
+- `overrideDatasource: github-releases`: Renovate's default lookup admits tags
+  that have no release, dated by whoever pushed the tag. Under this setting,
+  Renovate considers only versions with a [GitHub release][renovate-releases],
+  dated by the release's publication time, which GitHub sets. A version whose
+  tag has no release is therefore never proposed (a release deleted after
+  Renovate saw it can linger in its cache for up to 30 days).
+- `branchTopic` with the proposed SHA: a released tag can be moved after its
+  release is old enough to pass the cooldown, and Renovate would then propose
+  the new commit as if it were the aged release. With the SHA in the branch
+  name, a moved tag produces a new pull request (Renovate closes the old one if
+  nobody has pushed to it) instead of a silent change to an open one. The
+  setting makes a changed target visible; the review's tag comparison is what
+  notices it, and a same-version SHA change is investigated, since matching
+  today's tag says nothing about the commit's age. Together, the setting and the
+  review bound what a moved tag can do; a compromised upstream that publishes a
+  proper release and waits is the cooldown's problem, and beyond it, the
+  reviewer's.
+
+The rule matches action and reusable-workflow refs only; runner labels
+(`runs-on: ubuntu-latest`) have no GitHub releases and keep Renovate's default
+lookup.
+
+A bump pull request's own CI runs the proposed commit before any maintainer
+looks at it: an action in the `check` job of [`check.yaml`][], the shared
+workflow in the `zizmor` job of [`zizmor.yaml`][]. Those jobs hold
+`contents: read` (the zizmor job also `security-events: write`) and no publish
+authority; publishing is the [release runbook](release.md)'s procedure, from a
+reviewed `main` commit.
+
 ## Pinned actions, protected refs, and a script-free publish
 
 - Actions in [`check.yaml`][] and [`publish.yaml`][] are pinned to full commit
   SHAs, with the version in a trailing comment for readability (a tag can be
-  moved; a SHA cannot).
+  moved; a SHA cannot). How the pins move:
+  [Dependency bumps](#dependency-bumps).
 - A repository ruleset on `main` blocks deletion and force-pushes, requires a
   linear history, and requires a passing `check` run plus the code-scanning
   results described under [Workflow lint](#workflow-lint) before the branch
@@ -135,6 +198,11 @@ the refresh lane's PR step) are in the user docs'
 [otel-supply-chain]: https://opentelemetry.io/site/design/supply-chain-security/
 [otel-zizmor]: https://github.com/open-telemetry/shared-workflows/blob/main/zizmor/README.md
 [`publish.yaml`]: ../.github/workflows/publish.yaml
+[Renovate]: https://docs.renovatebot.com/
+[renovate-age]: https://docs.renovatebot.com/key-concepts/minimum-release-age/
+[renovate-app]: https://docs.renovatebot.com/getting-started/installing-onboarding/#hosted-githubcom-app
+[renovate-releases]: https://docs.renovatebot.com/modules/datasource/github-releases/
+[`renovate.jsonc`]: ../renovate.jsonc
 [zizmor]: https://docs.zizmor.sh/
 [`zizmor.yaml`]: ../.github/workflows/zizmor.yaml
 <!-- prettier-ignore-end -->

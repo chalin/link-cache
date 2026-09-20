@@ -1,0 +1,22 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    ":dependencyDashboard",
+    ":configMigration",
+    "helpers:pinGitHubActionDigests",
+    "helpers:githubDigestChangelogs",
+  ],
+  "enabledManagers": ["github-actions", "npm", "nvm"],
+  "minimumReleaseAge": "7 days",
+  "packageRules": [
+    {
+      // Rationale: _docs/supply-chain.md § Dependency bumps.
+      "matchManagers": ["github-actions"],
+      "matchDepTypes": ["action", "workflow"],
+      "overrideDatasource": "github-releases",
+      "branchTopic": "{{{depNameSanitized}}}-{{{newDigest}}}",
+    },
+  ],
+  "schedule": ["* * * * 0"], // Sunday (UTC)
+  "labels": ["dependencies"],
+}
