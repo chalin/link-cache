@@ -1,9 +1,12 @@
 ---
-title: Dependency bumps
+title: Dependency-bump review
+description:
+  Check a Renovate pull request before merging it, with the `gh` calls for
+  release age, tag-to-commit, and ancestry.
 ---
 
-How a [Renovate][] pull request is reviewed before merge. For why the bumps
-arrive as they do, see [Supply-chain posture](supply-chain.md#dependency-bumps).
+For why the bumps arrive as they do, see
+[Supply-chain posture](supply-chain.md#dependency-bumps).
 
 ## Any bump
 

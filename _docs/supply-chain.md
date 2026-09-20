@@ -105,7 +105,7 @@ automerge. For an action bump, the review confirms that the version has a GitHub
 release older than the cooldown, that the pull request's SHA is the commit the
 version tag names upstream now, and that the commit is an ancestor of the
 upstream's default or release branch. The steps, with the `gh` calls:
-[Dependency bumps](dependency-bumps.md).
+[Dependency-bump review](dependency-bumps.md).
 
 When a pin has not moved, look in three places. The Dependency Dashboard issue
 Renovate keeps in the repository lists the updates it has found but not yet

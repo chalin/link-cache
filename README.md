@@ -5,7 +5,7 @@ Zero-dependency helper CLIs for cached [Lychee][] link checking.
 - **User docs**: [Install and run][cli], [cache format][format], [operating
   model][model], [migration][migration]
 - **Maintainer docs**: [Development][development], [releases][release],
-  [dependency bumps][bumps], [supply-chain posture][posture]
+  [dependency-bump review][bumps], [supply-chain posture][posture]
 - **Security**: [how to report a vulnerability][policy]
 
 <!-- prettier-ignore-start -->
