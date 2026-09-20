@@ -88,9 +88,8 @@ repository's pins:
 
 - The `uses:` refs in `.github/workflows/`: two actions, `actions/checkout` and
   `actions/setup-node`, and the reusable zizmor workflow from
-  `open-telemetry/shared-workflows`. Renovate rewrites each ref's SHA and its
-  `# vX.Y.Z` comment together.
-- The dev dependencies in `package.json`
+  `open-telemetry/shared-workflows`
+- The dev dependencies in `package.json` and `package-lock.json`
 - The Node version in `.nvmrc`
 
 [`renovate.jsonc`][] limits Renovate to those three managers, sets the schedule
@@ -106,11 +105,9 @@ request pins is the one the version's release names, and that the release has
 aged. The checks, with their `gh` calls:
 [Dependency-bump review](dependency-bumps.md).
 
-When a pin has not moved, look in three places. The Dependency Dashboard issue
+When a pin has not moved, look in two places. The Dependency Dashboard issue
 Renovate keeps in the repository lists the updates it has found but not yet
-proposed. A version whose tag has no GitHub release is never a candidate (a
-release deleted after Renovate saw it can linger in its cache for up to 30
-days). And the config does nothing until the repository owner enables the
+proposed. And the config does nothing until the repository owner enables the
 repository in the [Mend Renovate app][renovate-app], a one-time step whose
 absence looks exactly like silence.
 
@@ -120,7 +117,9 @@ which can be moved to another commit at any time:
 - `overrideDatasource: github-releases`: Renovate's default lookup admits tags
   that have no release, dated by whoever pushed the tag. Under this setting,
   Renovate considers only versions with a [GitHub release][renovate-releases],
-  dated by the release's publication time, which GitHub sets.
+  dated by the release's publication time, which GitHub sets. A version whose
+  tag has no release is therefore never proposed (a release deleted after
+  Renovate saw it can linger in its cache for up to 30 days).
 - `branchTopic` with the proposed SHA: a released tag can be moved after its
   release is old enough to pass the cooldown, and Renovate would then propose
   the new commit as if it were the aged release. With the SHA in the branch
