@@ -6,6 +6,7 @@ Zero-dependency helper CLIs for cached [Lychee][] link checking.
   model][model], [migration][migration]
 - **Maintainer docs**: [Development][development], [releases][release],
   [dependency bumps][bumps], [supply-chain posture][posture]
+- **Security**: [how to report a vulnerability][policy]
 
 <!-- prettier-ignore-start -->
 [bumps]: _docs/dependency-bumps.md
@@ -15,6 +16,7 @@ Zero-dependency helper CLIs for cached [Lychee][] link checking.
 [Lychee]: https://github.com/lycheeverse/lychee
 [migration]: docs/migrate.md
 [model]: docs/operating-model.md
+[policy]: SECURITY.md
 [posture]: _docs/supply-chain.md
 [release]: _docs/release.md
 <!-- prettier-ignore-end -->
