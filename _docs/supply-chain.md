@@ -98,46 +98,49 @@ on which it opens pull requests, and sets a [minimum release age][renovate-age]:
 the cooldown a version must have passed before Renovate proposes it (Renovate's
 default exempts a fix for a security alert). It complements `.npmrc`'s
 `min-release-age`, which gates what npm resolves and so reaches neither actions
-nor Node. Updates Renovate has found but not yet proposed appear in the
-Dependency Dashboard issue it keeps in the repository. The config does nothing
-until the repository owner enables the repository in the [Mend Renovate
-app][renovate-app], a one-time step.
+nor Node.
 
-A maintainer reviews every Renovate pull request before merging it, as with any
-dependency bump; there is no automerge. For an action bump, the maintainer
-checks three things: the release exists on GitHub and is older than the
-cooldown; the SHA in the pull request is the commit the version tag points at
-upstream now; and that commit is on the upstream's default or release branch.
-The last two checks and two settings in `renovate.jsonc` exist for one reason:
-an action's version is a git tag, a tag can be moved to a different commit at
-any time, and so a version number says nothing about which commit it names
-today.
+A maintainer reviews every Renovate pull request before merging it; there is no
+automerge. For an action bump, the review confirms that the version has a GitHub
+release older than the cooldown, that the pull request's SHA is the commit the
+version tag names upstream now, and that the commit is an ancestor of the
+upstream's default or release branch. The steps, with the `gh` calls:
+[Dependency bumps](dependency-bumps.md).
 
-- `overrideDatasource`: by default, Renovate dates an action version by its git
-  tag, and a tag's date is set by whoever pushed the tag, so a tag can be given
-  a date that already clears the cooldown. With it set to `github-releases`,
-  Renovate considers only versions that have a [GitHub
-  Release][renovate-releases] and dates each by the Release's publication time,
-  which GitHub sets. A tag with no Release is never proposed.
-- `branchTopic`: a released tag can be moved after its Release is old enough to
-  pass the cooldown, and Renovate would then propose the new commit as if it
-  were the aged release. The branch name includes the SHA Renovate proposes, so
-  a moved tag produces a new pull request (Renovate closes the old one) instead
-  of a silent change to an open one. The setting makes the move visible; the
-  maintainer's SHA and branch checks are what stop it.
+When a pin has not moved, look in three places. The Dependency Dashboard issue
+Renovate keeps in the repository lists the updates it has found but not yet
+proposed. A version whose tag has no GitHub release is never a candidate (a
+release deleted after Renovate saw it can linger in its cache for up to 30
+days). And the config does nothing until the repository owner enables the
+repository in the [Mend Renovate app][renovate-app], a one-time step whose
+absence looks exactly like silence.
 
-The rule that holds both settings matches action and reusable-workflow refs
-only; runner labels (`runs-on: ubuntu-latest`) have no GitHub Releases and keep
-Renovate's default lookup.
+Two settings in the action rule exist because an action's version is a git tag,
+which can be moved to another commit at any time:
 
-Before a maintainer reviews a bump pull request, that pull request's own CI has
-already run the proposed commit: an action in the `check` job of
-[`check.yaml`][], the shared workflow in the `zizmor` job of [`zizmor.yaml`][].
-Each job's token has `contents: read`; the zizmor job's also has
-`security-events: write`. The publish job of [`publish.yaml`][], the only job
-with publish authority (`id-token: write`), runs when a release is published, so
-only after a merge and after a maintainer cuts the release. An unreviewed commit
-therefore runs with those two grants at most, and never with publish authority.
+- `overrideDatasource: github-releases`: Renovate's default lookup admits tags
+  that have no release, dated by whoever pushed the tag. Under this setting,
+  Renovate considers only versions with a [GitHub release][renovate-releases],
+  dated by the release's publication time, which GitHub sets.
+- `branchTopic` with the proposed SHA: a released tag can be moved after its
+  release is old enough to pass the cooldown, and Renovate would then propose
+  the new commit as if it were the aged release. With the SHA in the branch
+  name, a moved tag produces a new pull request (Renovate closes the old one if
+  nobody has pushed to it) instead of a silent change to an open one. The
+  setting makes a changed target visible; the review's tag comparison is what
+  notices it, and a same-version SHA change is investigated, since matching
+  today's tag says nothing about the commit's age.
+
+The rule matches action and reusable-workflow refs only; runner labels
+(`runs-on: ubuntu-latest`) have no GitHub releases and keep Renovate's default
+lookup.
+
+A bump pull request's own CI runs the proposed commit before any maintainer
+looks at it: an action in the `check` job of [`check.yaml`][], the shared
+workflow in the `zizmor` job of [`zizmor.yaml`][]. Those jobs hold
+`contents: read` (the zizmor job also `security-events: write`) and no publish
+authority; publishing is the [release runbook](release.md)'s procedure, from a
+reviewed `main` commit.
 
 ## Pinned actions, protected refs, and a script-free publish
 
