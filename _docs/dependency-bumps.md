@@ -5,13 +5,14 @@ description:
   release age, tag-to-commit, and ancestry.
 ---
 
-For why the bumps arrive as they do, see
-[Supply-chain posture](supply-chain.md#dependency-bumps).
+[Renovate][] opens a pull request for each pin it moves; a maintainer reviews it
+before merging. What the checks below establish, and why the pull requests
+arrive as they do: [Supply-chain posture](supply-chain.md#dependency-bumps).
 
 ## Any bump
 
-1. Read the whole diff, not the title: a bump touches manifests, lockfiles, and
-   workflow `uses:` lines, nothing else.
+1. Read the whole diff, not the title. A bump touches only the files that hold
+   the [pins Renovate manages](supply-chain.md#dependency-bumps).
 2. Check that the new version is older than the cooldown in [`renovate.jsonc`][]
    (a security-alert fix is exempt and arrives early).
 3. Let the pull request's checks finish green, then merge.
@@ -33,8 +34,9 @@ gh api repos/OWNER/REPO/compare/SHA...main --jq .status
    cooldown. `"immutable": true` means the tag cannot have moved since: the
    remaining checks are moot.
 2. The second call peels the tag to its commit; it must equal _`SHA`_. A
-   mismatch means the tag moved after Renovate looked; expect Renovate to close
-   this pull request and open another for the new commit.
+   mismatch means the tag moved after Renovate looked: don't merge this pull
+   request; its replacement is described under `branchTopic` in the
+   [posture section](supply-chain.md#dependency-bumps).
 3. The third call must report `behind` or `identical`: the commit is an ancestor
    of the upstream's default branch. A backport lives on a release branch
    instead (`actions/checkout` v6.1.0 on `releases/v6`); compare against that
@@ -45,9 +47,6 @@ gh api repos/OWNER/REPO/compare/SHA...main --jq .status
    (`gh api repos/OWNER/REPO/compare/OLD_SHA...SHA`) and stop on any change to
    `dist/`, `action.yml`, or a workflow that the release notes don't account
    for.
-
-These checks bound what a moved tag can do, not what a compromised upstream that
-publishes a proper release can do; the cooldown is the control for that.
 
 <!-- prettier-ignore-start -->
 [Renovate]: https://docs.renovatebot.com/

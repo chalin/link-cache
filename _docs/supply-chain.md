@@ -101,10 +101,9 @@ default exempts a fix for a security alert). It complements `.npmrc`'s
 nor Node.
 
 A maintainer reviews every Renovate pull request before merging it; there is no
-automerge. For an action bump, the review confirms that the version has a GitHub
-release older than the cooldown, that the pull request's SHA is the commit the
-version tag names upstream now, and that the commit is an ancestor of the
-upstream's default or release branch. The steps, with the `gh` calls:
+automerge. For an action bump, the review establishes that the commit the pull
+request pins is the one the version's release names, and that the release has
+aged. The checks, with their `gh` calls:
 [Dependency-bump review](dependency-bumps.md).
 
 When a pin has not moved, look in three places. The Dependency Dashboard issue
@@ -129,7 +128,10 @@ which can be moved to another commit at any time:
   nobody has pushed to it) instead of a silent change to an open one. The
   setting makes a changed target visible; the review's tag comparison is what
   notices it, and a same-version SHA change is investigated, since matching
-  today's tag says nothing about the commit's age.
+  today's tag says nothing about the commit's age. Together, the setting and the
+  review bound what a moved tag can do; a compromised upstream that publishes a
+  proper release and waits is the cooldown's problem, and beyond it, the
+  reviewer's.
 
 The rule matches action and reusable-workflow refs only; runner labels
 (`runs-on: ubuntu-latest`) have no GitHub releases and keep Renovate's default
