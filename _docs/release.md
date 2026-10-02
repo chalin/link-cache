@@ -11,7 +11,8 @@ repo and [`publish.yaml`][] as the publisher.
 ## Before tagging
 
 1. `main` holds everything meant for the release (docs and code land before the
-   tag, not after), and its head's [`check.yaml`][] run is green (why:
+   tag, not after), and the checks its ruleset requires ([`check.yaml`][],
+   zizmor, CodeQL) are green on its head (why:
    [Supply-chain posture](supply-chain.md)).
 2. `package.json` `version` is the release version, _`VERSION`_ below. If a bump
    is needed, land it in its own commit with `npm version` _`VERSION`_
@@ -31,30 +32,49 @@ repo and [`publish.yaml`][] as the publisher.
    always includes.
 
 4. Review the diff since the previous tag for behavior changes consumers must
-   act on.
+   act on, and draft the release notes (shape in
+   [Tag and release](#tag-and-release), step 2) in `tmp/` for review.
+5. The registry does not hold the version yet: `npm view link-cache@`_`VERSION`_
+   `version` reports E404. The failure branch below relies on this baseline.
 
 ## Tag and release
 
 1. Tag the exact `main` commit verified in [Before tagging](#before-tagging),
    _`RELEASE_SHA`_: `git tag v`_`VERSION`_ _`RELEASE_SHA`_, then
-   `git push origin v`_`VERSION`_. Push the tag before creating the release:
-   with immutable releases on, the release API rejects a tag that does not exist
-   yet.
-2. Create the GitHub release from the tag, with notes: a one-line summary,
-   behavior changes and any migration steps, then the merged PRs. Leave
-   _Pre-release_ unchecked (why: [Supply-chain posture](supply-chain.md)).
-   Publishing the release is the only trigger of [`publish.yaml`][].
+   `git push origin v`_`VERSION`_, and confirm the remote tag points at
+   _`RELEASE_SHA`_ (`gh api repos/chalin/link-cache/git/ref/tags/v`_`VERSION`_).
+   Push the tag before creating the release: with immutable releases on, the
+   release API rejects a tag that does not exist yet.
+2. Create the GitHub release from the tag, passing the notes by file:
+
+   ```sh
+   gh release create vVERSION --verify-tag --title vVERSION --notes-file tmp/NOTES_FILE
+   ```
+
+   Notes: a one-line summary, behavior changes and any migration steps, then the
+   merged PRs; link docs at the tag ref (`blob/v`_`VERSION`_`/…`), so the notes
+   keep pointing at the released text. Leave the release a full release, not a
+   pre-release (why: [Supply-chain posture](supply-chain.md)). Publishing the
+   release is the only trigger of [`publish.yaml`][].
+
 3. Watch the [`publish.yaml`][] run: it refuses a commit off `main` or a tag
    that doesn't match `package.json`, then publishes.
-4. Verify on npm: the version appears with a provenance badge,
-   `npm view link-cache version` prints it, and the README's doc links on the
-   package page resolve (npm rewrites them to this repo).
+4. Verify on npm. The registry lags a green run by a few minutes (`npm publish`
+   says so in its last lines): until then `npm view` reports E404 for the
+   version and the old `latest`. Once it catches up:
+   - `npm view link-cache version dist-tags dist.shasum dist.attestations`
+     prints the version as `latest`, the shasum from the pack listing, and a
+     provenance attestation URL.
+   - The README's doc links on the package page resolve. The page refuses
+     non-browser clients, so check it in a browser; the scriptable half is that
+     each relative link target exists on `main`, since npm rewrites them against
+     the repository URL's default branch.
 
 If the workflow fails:
 
 1. Check whether the version reached npm with `npm view link-cache@`_`VERSION`_
-   `version`. Publication can succeed before a lost response or a failing
-   post-job step.
+   `version`, allowing for the registry lag above. Publication can succeed
+   before a lost response or a failing post-job step.
 2. If the version is present, do not publish it again. Investigate the remaining
    workflow failure.
 3. If the registry confirms the version is absent, re-run the failed job. A
