@@ -53,9 +53,7 @@ repo and [`publish.yaml`][] as the publisher.
    ```
 
    The last command must print _`RELEASE_SHA`_. On a mismatch, stop here: the
-   tag can't move, so bump the version and start over. The tag must exist before
-   step 2 creates the release: with immutable releases on, the release API
-   rejects a missing tag.
+   tag can't move, so bump the version and start over.
 
 2. Create the GitHub release from the tag, with _`NOTES_FILE`_ the reviewed
    draft from [Before tagging](#before-tagging), step 4:
