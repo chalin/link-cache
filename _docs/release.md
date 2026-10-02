@@ -43,13 +43,20 @@ repo and [`publish.yaml`][] as the publisher.
 ## Tag and release
 
 1. Tag the exact `main` commit verified in [Before tagging](#before-tagging),
-   _`RELEASE_SHA`_: `git tag v`_`VERSION`_ _`RELEASE_SHA`_, then
-   `git push origin v`_`VERSION`_, and confirm that
-   `gh api repos/chalin/link-cache/commits/v`_`VERSION`_ `--jq .sha` prints
-   _`RELEASE_SHA`_. On a mismatch, stop before creating the release: the tag
-   can't move, so bump the version and start over. Push the tag before creating
-   the release: with immutable releases on, the release API rejects a tag that
-   does not exist yet.
+   _`RELEASE_SHA`_, push the tag, and confirm that the remote tag resolves to
+   it:
+
+   ```sh
+   git tag vVERSION RELEASE_SHA
+   git push origin vVERSION
+   gh api repos/chalin/link-cache/commits/vVERSION --jq .sha
+   ```
+
+   The last command must print _`RELEASE_SHA`_. On a mismatch, stop here: the
+   tag can't move, so bump the version and start over. The tag must exist before
+   step 2 creates the release: with immutable releases on, the release API
+   rejects a missing tag.
+
 2. Create the GitHub release from the tag, with _`NOTES_FILE`_ the reviewed
    draft from [Before tagging](#before-tagging), step 4:
 
