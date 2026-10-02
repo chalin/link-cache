@@ -33,10 +33,10 @@ repo and [`publish.yaml`][] as the publisher.
    [Tag and release](#tag-and-release) step 4 compares against it.
 
 4. Review the diff since the previous tag for behavior changes consumers must
-   act on, and draft the release notes in `tmp/`: a one-line summary, behavior
-   changes and any migration steps, then the merged PRs. Link docs at the tag
-   ref (`blob/v`_`VERSION`_`/…`), so the notes keep pointing at the released
-   text.
+   act on, and draft the release notes in `tmp/`: a one-line summary, then
+   behavior changes and any migration steps (GitHub appends the merged-PR list).
+   Link docs at the tag ref (`blob/v`_`VERSION`_`/…`), so the notes keep
+   pointing at the released text.
 5. The registry does not hold the version yet: `npm view link-cache@`_`VERSION`_
    `version` reports E404. A hit means the version is already taken: back to
    step 2. The failure branch below also relies on this baseline.
@@ -55,7 +55,7 @@ repo and [`publish.yaml`][] as the publisher.
    [Before tagging](#before-tagging), step 4:
 
    ```sh
-   gh release create vVERSION --verify-tag --title vVERSION --notes-file tmp/NOTES_FILE
+   gh release create vVERSION --verify-tag --title vVERSION --notes-file tmp/NOTES_FILE --generate-notes
    ```
 
    Don't pass `--prerelease` (why: [Supply-chain posture](supply-chain.md)). The
