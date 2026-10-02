@@ -77,12 +77,13 @@ repo and [`publish.yaml`][] as the publisher.
 
 If the workflow fails:
 
-1. Check whether the version reached npm: a `+ link-cache@`_`VERSION`_ line in
-   the publish step's log means the registry accepted it, whatever `npm view`
-   says during the lag above; without that line, re-check
-   `npm view link-cache@`_`VERSION`_ `version` for a few minutes before reading
-   E404 as absent. Publication can succeed before a lost response or a failing
-   post-job step.
+1. Check whether the version reached npm (publication can succeed before a lost
+   response or a failing post-job step):
+   - A `+ link-cache@`_`VERSION`_ line in the publish step's log means the
+     registry accepted the version, whatever `npm view` says during the lag
+     above.
+   - Without that line, re-check `npm view link-cache@`_`VERSION`_ `version` for
+     a few minutes before reading E404 as absent.
 2. If the version is present, do not publish it again. Investigate the remaining
    workflow failure.
 3. If the registry confirms the version is absent, re-run the failed job. A
