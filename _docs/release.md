@@ -72,10 +72,10 @@ repo and [`publish.yaml`][] as the publisher.
 4. Verify on npm. The registry lags the publish by a few minutes (`npm publish`
    says so in its last lines): until then `npm view` reports E404 for the
    version, and `latest` still names the previous one. Once it catches up:
-   - `npm view link-cache version dist-tags dist.shasum dist.attestations`
-     prints the version as `latest`, the shasum from the pack listing, and
-     `dist.attestations` with a `provenance` entry (its URL alone could be a
-     mere publish signature).
+   - `npm view link-cache@`_`VERSION`_
+     `version dist-tags dist.shasum dist.attestations` prints _`VERSION`_ as
+     `latest`, the shasum from the pack listing, and `dist.attestations` with a
+     `provenance` entry (its URL alone could be a mere publish signature).
    - The README's doc links on the package page resolve. The page refuses
      non-browser clients, so check it in a browser; the scriptable half is that
      every relative link in `npm view link-cache readme` has its target on
