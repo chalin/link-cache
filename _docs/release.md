@@ -11,15 +11,15 @@ repo and [`publish.yaml`][] as the publisher.
 ## Before tagging
 
 1. `main` holds everything meant for the release (docs and code land before the
-   tag, not after), and the checks its ruleset requires ([`check.yaml`][],
-   zizmor, CodeQL) are green on its head (why:
-   [Supply-chain posture](supply-chain.md)).
+   tag, not after), and the checks its ruleset requires are green on its head
+   (which and why:
+   [Supply-chain posture](supply-chain.md#pinned-actions-protected-refs-and-a-script-free-publish)).
 2. `package.json` `version` is the release version, _`VERSION`_ below. If a bump
    is needed, land it in its own commit with `npm version` _`VERSION`_
    `--no-git-tag-version`, which moves the lockfile's copy too, and update the
    [GitHub-install example](../docs/cli.md#install-from-github)
    (`#semver:^`_`VERSION`_) in the same commit.
-3. Locally, from a clean checkout of `main`:
+3. Locally, from a clean, up-to-date checkout of `main`:
 
    ```sh
    npm run install:safe
@@ -29,52 +29,60 @@ repo and [`publish.yaml`][] as the publisher.
 
    Read the pack listing against `files` in `package.json`: only the bins and
    their `lib/` modules ship, plus the manifest, README, and license that npm
-   always includes.
+   always includes. Keep the shasum it prints:
+   [Tag and release](#tag-and-release) step 4 compares against it.
 
 4. Review the diff since the previous tag for behavior changes consumers must
-   act on, and draft the release notes (shape in
-   [Tag and release](#tag-and-release), step 2) in `tmp/` for review.
+   act on, and draft the release notes in `tmp/`: a one-line summary, behavior
+   changes and any migration steps, then the merged PRs. Link docs at the tag
+   ref (`blob/v`_`VERSION`_`/…`), so the notes keep pointing at the released
+   text.
 5. The registry does not hold the version yet: `npm view link-cache@`_`VERSION`_
-   `version` reports E404. The failure branch below relies on this baseline.
+   `version` reports E404. A hit means the version is already taken: back to
+   step 2. The failure branch below also relies on this baseline.
 
 ## Tag and release
 
 1. Tag the exact `main` commit verified in [Before tagging](#before-tagging),
    _`RELEASE_SHA`_: `git tag v`_`VERSION`_ _`RELEASE_SHA`_, then
-   `git push origin v`_`VERSION`_, and confirm the remote tag points at
-   _`RELEASE_SHA`_ (`gh api repos/chalin/link-cache/git/ref/tags/v`_`VERSION`_).
-   Push the tag before creating the release: with immutable releases on, the
-   release API rejects a tag that does not exist yet.
-2. Create the GitHub release from the tag, passing the notes by file:
+   `git push origin v`_`VERSION`_, and confirm that
+   `gh api repos/chalin/link-cache/commits/v`_`VERSION`_ `--jq .sha` prints
+   _`RELEASE_SHA`_. On a mismatch, stop before creating the release: the tag
+   can't move, so bump the version and start over. Push the tag before creating
+   the release: with immutable releases on, the release API rejects a tag that
+   does not exist yet.
+2. Create the GitHub release from the tag, with _`NOTES_FILE`_ the draft from
+   [Before tagging](#before-tagging), step 4:
 
    ```sh
    gh release create vVERSION --verify-tag --title vVERSION --notes-file tmp/NOTES_FILE
    ```
 
-   Notes: a one-line summary, behavior changes and any migration steps, then the
-   merged PRs; link docs at the tag ref (`blob/v`_`VERSION`_`/…`), so the notes
-   keep pointing at the released text. Leave the release a full release, not a
-   pre-release (why: [Supply-chain posture](supply-chain.md)). Publishing the
-   release is the only trigger of [`publish.yaml`][].
+   Don't pass `--prerelease` (why: [Supply-chain posture](supply-chain.md)). The
+   command publishes the release, the only trigger of [`publish.yaml`][].
 
 3. Watch the [`publish.yaml`][] run: it refuses a commit off `main` or a tag
    that doesn't match `package.json`, then publishes.
-4. Verify on npm. The registry lags a green run by a few minutes (`npm publish`
+4. Verify on npm. The registry lags the publish by a few minutes (`npm publish`
    says so in its last lines): until then `npm view` reports E404 for the
-   version and the old `latest`. Once it catches up:
+   version, and `latest` still names the previous one. Once it catches up:
    - `npm view link-cache version dist-tags dist.shasum dist.attestations`
      prints the version as `latest`, the shasum from the pack listing, and a
      provenance attestation URL.
    - The README's doc links on the package page resolve. The page refuses
      non-browser clients, so check it in a browser; the scriptable half is that
-     each relative link target exists on `main`, since npm rewrites them against
-     the repository URL's default branch.
+     every relative link in `npm view link-cache@`_`VERSION`_ `readme` has its
+     target on `main` (the link's `blob/HEAD/` form returns 200), since npm
+     rewrites those links against the repository's default branch.
 
 If the workflow fails:
 
-1. Check whether the version reached npm with `npm view link-cache@`_`VERSION`_
-   `version`, allowing for the registry lag above. Publication can succeed
-   before a lost response or a failing post-job step.
+1. Check whether the version reached npm: a `+ link-cache@`_`VERSION`_ line in
+   the publish step's log means the registry accepted it, whatever `npm view`
+   says during the lag above; without that line, re-check
+   `npm view link-cache@`_`VERSION`_ `version` for a few minutes before reading
+   E404 as absent. Publication can succeed before a lost response or a failing
+   post-job step.
 2. If the version is present, do not publish it again. Investigate the remaining
    workflow failure.
 3. If the registry confirms the version is absent, re-run the failed job. A
@@ -139,7 +147,6 @@ For each bump PR:
 
 <!-- prettier-ignore-start -->
 [chalin/docsy-starter]: https://github.com/chalin/docsy-starter
-[`check.yaml`]: ../.github/workflows/check.yaml
 [google/docsy]: https://github.com/google/docsy
 [google/docsy-example]: https://github.com/google/docsy-example
 [open-telemetry/opentelemetry.io]: https://github.com/open-telemetry/opentelemetry.io
