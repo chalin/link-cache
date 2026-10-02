@@ -11,14 +11,14 @@ repo and [`publish.yaml`][] as the publisher.
 ## Before tagging
 
 1. `main` holds everything meant for the release (docs and code land before the
-   tag, not after), and its head's [`check.yaml`][] run is green (why:
-   [Supply-chain posture](supply-chain.md)).
+   tag, not after), and the checks its ruleset requires are green on its head
+   (which and why: [Supply-chain posture][posture-pinned]).
 2. `package.json` `version` is the release version, _`VERSION`_ below. If a bump
    is needed, land it in its own commit with `npm version` _`VERSION`_
    `--no-git-tag-version`, which moves the lockfile's copy too, and update the
    [GitHub-install example](../docs/cli.md#install-from-github)
    (`#semver:^`_`VERSION`_) in the same commit.
-3. Locally, from a clean checkout of `main`:
+3. Locally, from a clean, up-to-date checkout of `main`:
 
    ```sh
    npm run install:safe
@@ -28,33 +28,67 @@ repo and [`publish.yaml`][] as the publisher.
 
    Read the pack listing against `files` in `package.json`: only the bins and
    their `lib/` modules ship, plus the manifest, README, and license that npm
-   always includes.
+   always includes. Keep the shasum it prints:
+   [Tag and release](#tag-and-release) step 4 compares against it.
 
 4. Review the diff since the previous tag for behavior changes consumers must
-   act on.
+   act on, and draft the release notes in `tmp/`: a one-line summary, then
+   behavior changes and any migration steps (GitHub appends the merged-PR list).
+   Link docs at the tag ref (`blob/v`_`VERSION`_`/…`), so the notes keep
+   pointing at the released text.
+5. The registry does not hold the version yet: `npm view link-cache@`_`VERSION`_
+   `version` reports E404. A hit means the version is already taken: back to
+   step 2. The failure branch below also relies on this baseline.
 
 ## Tag and release
 
 1. Tag the exact `main` commit verified in [Before tagging](#before-tagging),
-   _`RELEASE_SHA`_: `git tag v`_`VERSION`_ _`RELEASE_SHA`_, then
-   `git push origin v`_`VERSION`_. Push the tag before creating the release:
-   with immutable releases on, the release API rejects a tag that does not exist
-   yet.
-2. Create the GitHub release from the tag, with notes: a one-line summary,
-   behavior changes and any migration steps, then the merged PRs. Leave
-   _Pre-release_ unchecked (why: [Supply-chain posture](supply-chain.md)).
-   Publishing the release is the only trigger of [`publish.yaml`][].
+   _`RELEASE_SHA`_, push the tag, and confirm that the remote tag resolves to
+   it:
+
+   ```sh
+   git tag vVERSION RELEASE_SHA
+   git push origin vVERSION
+   gh api repos/chalin/link-cache/commits/vVERSION --jq .sha
+   ```
+
+   The last command must print _`RELEASE_SHA`_. On a mismatch, stop here: the
+   tag can't move, so bump the version and start over.
+
+2. Create the GitHub release from the tag, with _`NOTES_FILE`_ the reviewed
+   draft from [Before tagging](#before-tagging), step 4:
+
+   ```sh
+   gh release create vVERSION --verify-tag --title vVERSION --notes-file tmp/NOTES_FILE --generate-notes
+   ```
+
+   Don't pass `--prerelease` (why: [Supply-chain posture](supply-chain.md)). The
+   command publishes the release, the only trigger of [`publish.yaml`][].
+
 3. Watch the [`publish.yaml`][] run: it refuses a commit off `main` or a tag
    that doesn't match `package.json`, then publishes.
-4. Verify on npm: the version appears with a provenance badge,
-   `npm view link-cache version` prints it, and the README's doc links on the
-   package page resolve (npm rewrites them to this repo).
+4. Verify on npm. The registry lags the publish by a few minutes (`npm publish`
+   says so in its last lines): until then `npm view` reports E404 for the
+   version, and `latest` still names the previous one. Once it catches up:
+   - `npm view link-cache@`_`VERSION`_
+     `version dist-tags dist.shasum dist.attestations` prints _`VERSION`_ as
+     `latest`, the shasum from the pack listing, and `dist.attestations` with a
+     `provenance` entry (its URL alone could be a mere publish signature).
+   - The README's doc links on the package page resolve. The page refuses
+     non-browser clients, so check it in a browser; the scriptable half is that
+     every relative link in `npm view link-cache readme` has its target on
+     `main` (the link's `blob/HEAD/` form returns 200), since npm rewrites those
+     links against the repository's default branch.
 
 If the workflow fails:
 
-1. Check whether the version reached npm with `npm view link-cache@`_`VERSION`_
-   `version`. Publication can succeed before a lost response or a failing
-   post-job step.
+1. Check whether the version reached npm (publication can succeed before a lost
+   response or a failing post-job step):
+   - A `+ link-cache@`_`VERSION`_ line in the publish step's log means the
+     registry accepted the version, whatever `npm view` says during the lag
+     above.
+   - Without that line, re-check `npm view link-cache@`_`VERSION`_ `version` for
+     a few minutes before reading E404 as absent.
 2. If the version is present, do not publish it again. Investigate the remaining
    workflow failure.
 3. If the registry confirms the version is absent, re-run the failed job. A
@@ -119,10 +153,10 @@ For each bump PR:
 
 <!-- prettier-ignore-start -->
 [chalin/docsy-starter]: https://github.com/chalin/docsy-starter
-[`check.yaml`]: ../.github/workflows/check.yaml
 [google/docsy]: https://github.com/google/docsy
 [google/docsy-example]: https://github.com/google/docsy-example
 [open-telemetry/opentelemetry.io]: https://github.com/open-telemetry/opentelemetry.io
+[posture-pinned]: supply-chain.md#pinned-actions-protected-refs-and-a-script-free-publish
 [`publish.yaml`]: ../.github/workflows/publish.yaml
 [theupdateframework/theupdateframework.io]: https://github.com/theupdateframework/theupdateframework.io
 <!-- prettier-ignore-end -->
